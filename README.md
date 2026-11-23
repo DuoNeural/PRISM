@@ -92,7 +92,8 @@ All models share an identical **factorized tied `49152 → 256` embedding bottle
   |---|---|---|---|---|---|---|---|---|
   | `gpt` | `45.95M` (`33.37M`) | `2,884 MB` | `~64,400` | `235.91` | `99.84` | **`3.9637`** | **`52.65`** | Overtakes `rpp` between 500–1,000 steps via full $512\times 512$ causal attention |
   | `rpp` | `46.10M` (`33.52M`) | **`1,370 MB`** | `~26,900` | **`232.52`** | `110.24` | **`4.0699`** | **`58.55`** | Leads at step 500 (and 1,500-step cosine `122.15 < 124.04`); `povm_scale: 12.0 -> 25.41`, **2.1× less VRAM**, $O(T)$ global scaling |
-  - `kcw` 5k running live (`~37.9k tok/s`, `R_order = 0.315`), followed by `ldg` 5k and `rmsn` (`Omega = 4/5`) 5k.
+  | `kcw` | `45.65M` (`33.07M`) | `6,583 MB` | `~38,000` | — | — | **`4.3669`** | **`78.80`** | Non-attention complex harmonic + Kuramoto phase lock held `R_order = 0.3223` across 40.96M tokens (`0` NaNs) |
+  - `ldg` 5k running live (`step ~1150/5000`, `21.8k tok/s`, `kappa -> 3.930`, `se_res <= 4e-5`), followed by `rmsn` (`Omega = 4/5`) 5k.
 
 ---
 
