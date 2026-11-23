@@ -85,8 +85,9 @@ All models share an identical **factorized tied `49152 → 256` embedding bottle
 | `rmsn` (`Ω=4/5`) | `49.28M` (`36.69M`) | `19,599 MB` | `~11,500` | `5.2210` | `185.13` | `lyap: -0.0699 -> -0.00123` (TRUE SILENT); `ws_entropy: 4.382 -> 4.249` (needs 10k-50k+ for full soliton condensation) |
 | `ldg_povm` v0.3 | `45.28M` (`32.70M`) | `11,099 MB` | `~16,400` | `5.4633` | `235.87` | Improved `-35.8 PPL` vs `v0.2` (`271.67`), `povm_scale -> 15.5`, though unattenuated TSSP+GENERIC gradients (`gn=22` early) still hinder unit-sphere POVM head |
 
-### v0.4 (Running Live on `p19285`)
-- **`rpp_delta`**: Combines our **122.15 PPL** `rpp` reversible Born-Amplitude POVM champion with alternating Chunk-64 WY Gated DeltaNet (`dh=64`) associative memory (`46.19M` params).
+### v0.4 Hybrid Check (`rpp_delta`, `1,500` steps) & Extended 5k Showdown (`40.96M` tokens)
+- **`rpp_delta` (`47.56M`, `1,534 MB` VRAM, `~19.5k tok/s`)**: `val_ce = 4.8390`, **`val_ppl = 126.34`** (`0` NaNs, `povm_scale -> 16.005`). Clean ablation: substituting half of `rpp`'s Dual-Timescale OU scans with WY Gated DeltaNet (`H=8`) slowed throughput and cost `+4.19 PPL` vs pure `rpp v0.3` (`122.15 PPL`), proving the **Dual-Timescale OU Scan + W=64 Attention + Born-Amplitude POVM** synergy.
+- **Now Running (`p19285`):** 5,000-step (`40.96M` tokens) extended showdown across `rpp`, `gpt`, `kcw`, `ldg`, and `rmsn` (`Omega=4/5`) to test deeper-horizon scaling and `RMSN` soliton condensation.
 
 ---
 
