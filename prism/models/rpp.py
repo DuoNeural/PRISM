@@ -29,6 +29,11 @@ def sliding_window_causal_sdpa(q: torch.Tensor, k: torch.Tensor, v: torch.Tensor
     q, k, v: [B, T, H, dh]. Zero Python token loops!
     """
     B, T, H, dh = q.shape
+    if window is None or window <= 0:
+        out = F.scaled_dot_product_attention(
+            q.transpose(1, 2), k.transpose(1, 2), v.transpose(1, 2), is_causal=True
+        )
+        return out.transpose(1, 2).contiguous()
     if T <= window:
         i_idx = torch.arange(T, device=q.device).unsqueeze(1)
         j_idx = torch.arange(T, device=q.device).unsqueeze(0)
@@ -264,6 +269,7 @@ class RPPLM(nn.Module):
         n_layers: int = 10,
         n_heads: int = 8,
         window: int = 64,
+        global_layers: tuple[int, ...] = (),
         ffn_dim: int = 480,
         max_seq_len: int = 1024,
         use_hybrid_delta: bool = False,
@@ -273,6 +279,7 @@ class RPPLM(nn.Module):
         self.vocab_size = vocab_size
         self.d_emb = d_emb
         self.d_model = d_model
+        self.global_layers = tuple(sorted(set(global_layers or ())))
         self.use_hybrid_delta = use_hybrid_delta
         self.use_povm_head = use_povm_head
 
@@ -281,8 +288,10 @@ class RPPLM(nn.Module):
         self.emb_up_q = nn.Linear(d_emb, d_model, bias=False)
         self.emb_up_p = nn.Linear(d_emb, d_model, bias=False)
 
+        global_set = set(self.global_layers)
         self.f_blocks = nn.ModuleList([
-            WindowAttnSubBlock(d_model, n_heads=n_heads, window=window, ffn_dim=ffn_dim) for _ in range(n_layers)
+            WindowAttnSubBlock(d_model, n_heads=n_heads, window=(0 if i in global_set else window), ffn_dim=ffn_dim)
+            for i in range(n_layers)
         ])
         self.g_blocks = nn.ModuleList([
             DeltaSubBlock(d_model, n_heads=n_heads, chunk_size=window, ffn_dim=320)

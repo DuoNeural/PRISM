@@ -40,6 +40,7 @@ def test_causality_all_models():
         "ldg": LDGLM(n_layers=2, max_seq_len=T).to(dev),
         "kcw": KCWLM(n_layers=2, max_seq_len=T).to(dev),
         "rpp": RPPLM(n_layers=2, max_seq_len=T).to(dev),
+        "rpp_bridge": RPPLM(n_layers=2, max_seq_len=T, window=32, global_layers=(1,)).to(dev),
         "rpp_delta": RPPLM(n_layers=2, max_seq_len=T, use_hybrid_delta=True).to(dev),
         "rmsn": RMSNOmega45LM(n_layers=2, d_model=128, num_slots=16).to(dev),
     }
@@ -213,6 +214,8 @@ def test_param_parity_and_step0():
         "ldg_povm": LDGLM(use_povm_head=True),
         "kcw": KCWLM(),
         "rpp": RPPLM(use_hybrid_delta=False, use_povm_head=True),
+        "rpp_bridge_1g": RPPLM(window=128, global_layers=(9,), use_hybrid_delta=False, use_povm_head=True),
+        "rpp_bridge_2g": RPPLM(window=128, global_layers=(4, 9), use_hybrid_delta=False, use_povm_head=True),
         "rpp_lin": RPPLM(use_hybrid_delta=False, use_povm_head=False),
         "rpp_delta": RPPLM(use_hybrid_delta=True),
         "rmsn": RMSNOmega45LM(),

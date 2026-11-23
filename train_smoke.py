@@ -53,6 +53,10 @@ def build_model(arch: str, vocab: int, seq_len: int, window: int = 64):
         return KCWLM(vocab_size=vocab, max_seq_len=max(seq_len, 1024))
     if arch == "rpp":
         return RPPLM(vocab_size=vocab, max_seq_len=max(seq_len, 1024), window=window, use_hybrid_delta=False, use_povm_head=True)
+    if arch == "rpp_bridge_1g":
+        return RPPLM(vocab_size=vocab, max_seq_len=max(seq_len, 1024), window=window, global_layers=(9,), use_hybrid_delta=False, use_povm_head=True)
+    if arch == "rpp_bridge_2g":
+        return RPPLM(vocab_size=vocab, max_seq_len=max(seq_len, 1024), window=window, global_layers=(4, 9), use_hybrid_delta=False, use_povm_head=True)
     if arch == "rpp_lin":
         return RPPLM(vocab_size=vocab, max_seq_len=max(seq_len, 1024), window=window, use_hybrid_delta=False, use_povm_head=False)
     if arch == "rpp_delta":
@@ -90,7 +94,7 @@ def evaluate(model, val_dl, device, max_batches: int = 40):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--arch", required=True, choices=["gpt", "ldg", "ldg_povm", "kcw", "rpp", "rpp_lin", "rpp_delta", "rmsn"])
+    p.add_argument("--arch", required=True, choices=["gpt", "ldg", "ldg_povm", "kcw", "rpp", "rpp_bridge_1g", "rpp_bridge_2g", "rpp_lin", "rpp_delta", "rmsn"])
     p.add_argument("--data", default="/workspace/rmsn_data/tokens_wiki103_full.pt")
     p.add_argument("--out", required=True)
     p.add_argument("--vocab", type=int, default=49152)
