@@ -65,9 +65,17 @@ All models share an identical **factorized tied `49152 → 256` embedding bottle
 | `ldg` | `45.69M` (`33.10M`) | `9,134 MB` | `~20,900` | `10.8133` | `591.53` | `186.37` | **`5.0720`** | **`159.50`** | `0` |
 | `rpp` | `46.10M` (`33.52M`) | **`1,394 MB`** | `~26,200` | `11.1639` | `1355.11` | `817.69` | **`6.6231`** | **`752.31`** | `0` |
 
-### v0.2 Observations (In Progress)
-- **`rpp v0.2` (`BornAmplitudePOVMHead`)**: **`val_ce = 5.1043` (`val_ppl = 164.73`)** at 1,500 steps (`0` NaNs, **`1,370.4 MB` peak VRAM**, `~27.3k tok/s`) — shattering the v0.1 Welch ceiling (`752.31 -> 164.73`, a **4.57x** perplexity improvement) and beating `gpt` at step 250 (`401.55` vs `442.62`).
-- **`kcw v0.2`** running live (`~37.7k tok/s`, `R_order = 0.327`, `frac_bistable = 0.5`, `exp_decay = 0.9696`); **`ldg v0.2`** and **`ldg_povm`** queued next.
+### v0.2 & `RMSN` Benchmark Results (`1,500` steps, `12.29M` tokens, `0` NaNs)
+| Arch | Total (Backbone) | Peak VRAM | Speed (tok/s) | Step-250 `val_ppl` | Step-1000 `val_ppl` | Final `val_ce` | Final `val_ppl` | Notes |
+|---|---|---|---|---|---|---|---|---|
+| `ldg` v0.2 | `45.69M` (`33.11M`) | `9,525 MB` | `~20,800` | — | — | **`4.9869`** | **`146.48`** | `-13.02 PPL` vs v0.1; `kappa: 3.8065 -> 3.8847`, `alpha=0.875`, `ds_dt=6.16` |
+| `kcw` v0.2 | `45.65M` (`33.07M`) | `6,583 MB` | `~37,400` | — | — | **`5.0339`** | **`153.52`** | Ablation: 50/50 damped/bistable (`-0.25/+0.25`) slightly worse than v0.1 `+0.25` (`146.87`) |
+| `rpp` v0.2 | `46.10M` (`33.52M`) | **`1,370 MB`** | `~27,200` | **`401.55`** | `190.29` | **`5.1043`** | **`164.73`** | **`-587.58 PPL` vs v0.1** (`BornAmplitudePOVMHead` broke Welch floor) |
+| `rmsn` (`Ω=4/5`) | `49.28M` (`36.69M`) | `19,599 MB` | `~11,500` | `640.57` | `208.53` | **`5.2210`** | **`185.13`** | `lyap: -0.0699 -> -0.00123` (TRUE SILENT); `ws_entropy: 4.382 -> 4.249` (needs 10k-50k+ for full soliton condensation) |
+| `ldg_povm` v0.2 | `45.69M` (`33.11M`) | `9,721 MB` | `~17,100` | `2110.26` | `330.61` | **`5.6046`** | **`271.67`** | Unscaled residuals spiked early `gn` -> fixed with `0.02/sqrt(2L)` + `25x` `tau_povm` LR in `v0.3` |
+
+### v0.3 (Running Live on `p19285`)
+- `ldg v0.3` (`H=16, dh=32`, compact bottleneck GENERIC, `n_vec=240`), `kcw v0.3` (`H=16`, `+0.25` bistable), `rpp v0.3` (`25x` `tau_povm` LR), `ldg_povm v0.3` (`0.02/sqrt(2L)` residual scale + `25x` `tau_povm` LR).
 
 ---
 
