@@ -212,7 +212,8 @@ def test_param_parity_and_step0():
         "ldg": LDGLM(use_povm_head=False),
         "ldg_povm": LDGLM(use_povm_head=True),
         "kcw": KCWLM(),
-        "rpp": RPPLM(use_hybrid_delta=False),
+        "rpp": RPPLM(use_hybrid_delta=False, use_povm_head=True),
+        "rpp_lin": RPPLM(use_hybrid_delta=False, use_povm_head=False),
         "rpp_delta": RPPLM(use_hybrid_delta=True),
         "rmsn": RMSNOmega45LM(),
     }

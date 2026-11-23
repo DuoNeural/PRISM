@@ -17,7 +17,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from prism.kernels.common import RMSNorm, build_rope_cache, apply_rope
+from prism.kernels.common import RMSNorm, FactorizedTiedHead, build_rope_cache, apply_rope
 from prism.kernels.complex_scan import complex_linear_scan
 from prism.kernels.born_povm import BornLogPOVMHead
 from prism.models.ldg import chunked_wy_delta_scan, lorentz_origin_logmap
@@ -262,12 +262,14 @@ class RPPLM(nn.Module):
         ffn_dim: int = 480,
         max_seq_len: int = 1024,
         use_hybrid_delta: bool = False,
+        use_povm_head: bool = True,
     ):
         super().__init__()
         self.vocab_size = vocab_size
         self.d_emb = d_emb
         self.d_model = d_model
         self.use_hybrid_delta = use_hybrid_delta
+        self.use_povm_head = use_povm_head
 
         self.embed = nn.Embedding(vocab_size, d_emb)
         nn.init.normal_(self.embed.weight, std=0.02)
@@ -284,7 +286,10 @@ class RPPLM(nn.Module):
             for i in range(n_layers)
         ])
         self.norm_out = RMSNorm(d_model)
-        self.head = BornLogPOVMHead(d_model, d_emb, init_scale=12.0, eps=1e-6, chunk_size=128, mode="amplitude")
+        if use_povm_head:
+            self.head = BornLogPOVMHead(d_model, d_emb, init_scale=12.0, eps=1e-6, chunk_size=128, mode="amplitude")
+        else:
+            self.head = FactorizedTiedHead(d_model, d_emb, chunk_size=256)
 
         cos, sin = build_rope_cache(max_seq_len, d_model // n_heads)
         self.register_buffer("rope_cos", cos, persistent=False)
@@ -323,7 +328,7 @@ class RPPLM(nn.Module):
         with torch.no_grad():
             stream_q_rms = q.pow(2).mean().sqrt().item()
             stream_p_rms = p.pow(2).mean().sqrt().item()
-            tau_scale = self.head.scale.item()
+            tau_scale = self.head.scale.item() if self.use_povm_head else 0.0
         m = {
             "stream_q_rms": stream_q_rms,
             "stream_p_rms": stream_p_rms,
