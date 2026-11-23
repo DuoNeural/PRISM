@@ -23,6 +23,7 @@ from prism.models.baseline_gpt import GPTBaselineLM
 from prism.models.ldg import LDGLM
 from prism.models.kcw import KCWLM
 from prism.models.rpp import RPPLM
+from prism.models.rmsn_baseline import RMSNOmega45LM
 
 
 class ChunkDataset(Dataset):
@@ -52,6 +53,8 @@ def build_model(arch: str, vocab: int, seq_len: int):
         return KCWLM(vocab_size=vocab, max_seq_len=max(seq_len, 1024))
     if arch == "rpp":
         return RPPLM(vocab_size=vocab, max_seq_len=max(seq_len, 1024))
+    if arch == "rmsn":
+        return RMSNOmega45LM(vocab_size=vocab)
     raise ValueError(f"Unknown arch: {arch}")
 
 
@@ -83,7 +86,7 @@ def evaluate(model, val_dl, device, max_batches: int = 40):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--arch", required=True, choices=["gpt", "ldg", "ldg_povm", "kcw", "rpp"])
+    p.add_argument("--arch", required=True, choices=["gpt", "ldg", "ldg_povm", "kcw", "rpp", "rmsn"])
     p.add_argument("--data", default="/workspace/rmsn_data/tokens_wiki103_full.pt")
     p.add_argument("--out", required=True)
     p.add_argument("--vocab", type=int, default=49152)

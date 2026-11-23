@@ -161,11 +161,11 @@ class CliffordGenericMixer(nn.Module):
         self.norm_prod = RMSNorm(d_feat)
         self.out_proj = nn.Linear(d_feat, d_model, bias=False)
 
-        # Lightweight GENERIC refinement on output space + Post-GENERIC norm
+        # Compact bottleneck GENERIC projections (512 -> 64 -> 512) saving ~4.6M params
         self.generic_dim = 64
         assert d_model % self.generic_dim == 0
-        self.e_proj = nn.Linear(d_model, d_model, bias=False)
-        self.s_proj = nn.Linear(d_model, d_model, bias=False)
+        self.e_proj = nn.Sequential(nn.Linear(d_model, 64, bias=False), nn.Linear(64, d_model, bias=False))
+        self.s_proj = nn.Sequential(nn.Linear(d_model, 64, bias=False), nn.Linear(64, d_model, bias=False))
         self.J_generic = nn.Parameter(torch.randn(self.generic_dim, self.generic_dim) * 0.02)
         self.gamma_raw = nn.Parameter(torch.tensor(-2.0))
         self.post_gen_norm = RMSNorm(d_model)
@@ -197,7 +197,7 @@ class CliffordGenericMixer(nn.Module):
 
 
 class LDGBlock(nn.Module):
-    def __init__(self, d_model: int, n_heads: int = 8, chunk_size: int = 64):
+    def __init__(self, d_model: int, n_heads: int = 16, chunk_size: int = 64, n_vec: int = 240):
         super().__init__()
         self.d_model = d_model
         self.n_heads = n_heads
@@ -216,9 +216,9 @@ class LDGBlock(nn.Module):
         # Gate projections (head-isotropic alpha_t, beta_t) + geodesic gate modulation
         self.ab_proj = nn.Linear(d_model, 2 * n_heads, bias=True)
         self.gate_geo = nn.Parameter(torch.zeros(2 * n_heads))
-        # Logarithmic multi-timescale head bias init: tau spanning ~[6, 180] tokens
+        # Logarithmic multi-timescale head bias init: tau spanning ~[4, 270] tokens
         with torch.no_grad():
-            self.ab_proj.bias[:n_heads].copy_(torch.linspace(1.6, 5.2, n_heads))
+            self.ab_proj.bias[:n_heads].copy_(torch.linspace(1.2, 5.6, n_heads))
             self.ab_proj.bias[n_heads:].fill_(-0.7)
 
         self.out_gate = nn.Linear(d_model, d_model, bias=False)
@@ -226,7 +226,7 @@ class LDGBlock(nn.Module):
         self.o_proj = nn.Linear(d_model, d_model, bias=False)
 
         self.norm2 = RMSNorm(d_model)
-        self.mixer = CliffordGenericMixer(d_model, n_vec=192)
+        self.mixer = CliffordGenericMixer(d_model, n_vec=n_vec)
 
     def forward(self, x: torch.Tensor, rope_cos: torch.Tensor, rope_sin: torch.Tensor):
         B, T, D = x.shape
@@ -287,7 +287,7 @@ class LDGLM(nn.Module):
         d_emb: int = 256,
         d_model: int = 512,
         n_layers: int = 10,
-        n_heads: int = 8,
+        n_heads: int = 16,
         chunk_size: int = 64,
         max_seq_len: int = 1024,
         tssp_weight: float = 0.05,
@@ -306,7 +306,7 @@ class LDGLM(nn.Module):
         self.emb_up = nn.Linear(d_emb, d_model, bias=False)
 
         self.blocks = nn.ModuleList([
-            LDGBlock(d_model, n_heads=n_heads, chunk_size=chunk_size) for _ in range(n_layers)
+            LDGBlock(d_model, n_heads=n_heads, chunk_size=chunk_size, n_vec=240) for _ in range(n_layers)
         ])
         self.norm_out = RMSNorm(d_model)
         if use_povm_head:
@@ -325,6 +325,11 @@ class LDGLM(nn.Module):
         self.register_buffer("rope_cos", cos, persistent=False)
         self.register_buffer("rope_sin", sin, persistent=False)
         self.apply(self._init_weights)
+        if use_povm_head:
+            res_std = 0.02 / math.sqrt(2 * n_layers)
+            for blk in self.blocks:
+                nn.init.normal_(blk.o_proj.weight, std=res_std)
+                nn.init.normal_(blk.mixer.out_proj.weight, std=res_std)
 
     def _init_weights(self, m):
         if isinstance(m, nn.Linear) and m is not self.emb_up:

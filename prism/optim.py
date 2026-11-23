@@ -72,16 +72,18 @@ class HybridMuonAdamW:
     """Cleanly coordinates Muon + multi-group AdamW with independent base LR ratios."""
     PHYSICS_KEYWORDS = (
         "a_log", "gamma_raw", "omega_base", "alpha_landau",
-        "beta_landau", "theta_fast", "theta_slow", "nernst_xi", "J_generic",
+        "beta_landau", "theta_fast", "theta_slow", "nernst_xi", "j_generic",
+        "log_poles", "interaction_matrix",
     )
     ADAMW_ONLY_KEYWORDS = (
         "embed", "emb_up", "head", "kuramoto_K", "q_lorentz", "k_lorentz",
-        "log_c", "tau_povm", "conv", "norm", "tssp", "gate_geo",
+        "log_c", "conv", "norm", "tssp", "gate_geo", "tau_povm",
     )
 
     def __init__(self, model: torch.nn.Module, adamw_lr: float = 2e-4, muon_lr: float = 8e-4, weight_decay: float = 0.1):
         muon_params = []
         physics_params = []
+        povm_temp_params = []
         adamw_decay_params = []
         adamw_nodecay_params = []
 
@@ -89,7 +91,9 @@ class HybridMuonAdamW:
             if not p.requires_grad:
                 continue
             lname = name.lower()
-            if any(k.lower() in lname for k in self.PHYSICS_KEYWORDS):
+            if "tau_povm" in lname:
+                povm_temp_params.append(p)
+            elif any(k.lower() in lname for k in self.PHYSICS_KEYWORDS):
                 physics_params.append(p)
             elif p.ndim == 2 and p.shape[0] != getattr(model, "vocab_size", 49152) and not any(k.lower() in lname for k in self.ADAMW_ONLY_KEYWORDS):
                 muon_params.append(p)
@@ -104,6 +108,8 @@ class HybridMuonAdamW:
             adamw_groups.append({"params": adamw_decay_params, "lr": adamw_lr, "weight_decay": 0.05, "base_lr": adamw_lr})
         if adamw_nodecay_params:
             adamw_groups.append({"params": adamw_nodecay_params, "lr": adamw_lr, "weight_decay": 0.0, "base_lr": adamw_lr})
+        if povm_temp_params:
+            adamw_groups.append({"params": povm_temp_params, "lr": adamw_lr * 25.0, "weight_decay": 0.0, "base_lr": adamw_lr * 25.0})
         if physics_params:
             adamw_groups.append({"params": physics_params, "lr": adamw_lr * 0.1, "weight_decay": 0.0, "base_lr": adamw_lr * 0.1})
 

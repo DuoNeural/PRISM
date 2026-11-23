@@ -65,13 +65,13 @@ def exact_bernoulli_double_well(
 
 
 class KCWBlock(nn.Module):
-    def __init__(self, d_model: int, n_heads: int = 8, ffn_dim: int = 1280, layer_idx: int = 0):
+    def __init__(self, d_model: int, n_heads: int = 16, ffn_dim: int = 1280, layer_idx: int = 0):
         super().__init__()
         self.d_model = d_model
         self.n_heads = n_heads
         self.head_dim = d_model // n_heads
         assert self.head_dim % 2 == 0
-        self.n_osc = self.head_dim // 2  # complex oscillators per head (32)
+        self.n_osc = self.head_dim // 2  # complex oscillators per head (16 across 16 heads)
 
         self.norm1 = RMSNorm(d_model)
         self.drive_proj = nn.Linear(d_model, d_model, bias=False)
@@ -94,13 +94,8 @@ class KCWBlock(nn.Module):
         # Inter-head algebraic Kuramoto phase coupling K in R^{H x H}
         self.kuramoto_K = nn.Parameter(torch.zeros(n_heads, n_heads))
 
-        # Exact Bernoulli Landau radial parameters: 50/50 bimodal init (-0.25 damped, +0.25 bistable)
-        half_m = self.n_osc // 2
-        alpha_init = torch.cat([
-            torch.full((1, 1, n_heads, half_m), -0.25),
-            torch.full((1, 1, n_heads, self.n_osc - half_m), 0.25),
-        ], dim=-1)
-        self.alpha_landau = nn.Parameter(alpha_init)
+        # Restored v0.1 bistable Landau init (+0.25) which outperformed 50/50 split by -6.65 PPL
+        self.alpha_landau = nn.Parameter(torch.full((1, 1, n_heads, self.n_osc), 0.25))
         self.beta_landau = nn.Parameter(torch.full((1, 1, n_heads, self.n_osc), 0.0))
 
         self.o_proj = nn.Linear(d_model, d_model, bias=False)
@@ -153,7 +148,7 @@ class KCWBlock(nn.Module):
         alpha_clamped = self.alpha_landau.clamp(min=-2.0, max=2.0)
         k_r, k_i = exact_bernoulli_double_well(k_r, k_i, alpha_clamped, beta_pos, dt=0.25)
 
-        wave_out = torch.cat([k_r, k_i], dim=-1).view(B, T, D).to(x.dtype) + 0.25 * u
+        wave_out = torch.cat([k_r, k_i], dim=-1).view(B, T, D).to(x.dtype)
         gate = F.silu(self.read_gate(h))
         x = x + self.o_proj(gate * wave_out)
 
@@ -190,7 +185,7 @@ class KCWLM(nn.Module):
         d_emb: int = 256,
         d_model: int = 512,
         n_layers: int = 10,
-        n_heads: int = 8,
+        n_heads: int = 16,
         ffn_dim: int = 1280,
         max_seq_len: int = 1024,
     ):
