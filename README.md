@@ -87,9 +87,12 @@ All models share an identical **factorized tied `49152 → 256` embedding bottle
 
 ### v0.4 Hybrid Check (`rpp_delta`, `1,500` steps) & Extended 5k Showdown (`40.96M` tokens)
 - **`rpp_delta` (`47.56M`, `1,534 MB` VRAM, `~19.5k tok/s`)**: `val_ce = 4.8390`, **`val_ppl = 126.34`** (`0` NaNs, `povm_scale -> 16.005`). Clean ablation: substituting half of `rpp`'s Dual-Timescale OU scans with WY Gated DeltaNet (`H=8`) slowed throughput and cost `+4.19 PPL` vs pure `rpp v0.3` (`122.15 PPL`), proving the **Dual-Timescale OU Scan + W=64 Attention + Born-Amplitude POVM** synergy.
-- **Now Running (`p19285`):** 5,000-step (`40.96M` tokens) extended showdown across `rpp`, `gpt`, `kcw`, `ldg`, and `rmsn` (`Omega=4/5`):
-  - **`rpp` (5,000 steps DONE):** `val_ce = 4.0699`, **`val_ppl = 58.55`** (`0` NaNs, **`1,370.4 MB` VRAM**, `~26.9k tok/s`, `povm_scale -> 25.41`, `stream_q/p_rms = 3.02 / 3.22`).
-  - `gpt` 5,000-step baseline running now (`~10 min` remaining), followed by `kcw`, `ldg`, and `rmsn`.
+- **5,000-Step (`40.96M` tokens) Championship Showdown (`p19285`, live):**
+  | Arch | Total (Backbone) | Peak VRAM | Speed (tok/s) | 500-step | 1500-step | 5000-step `val_ce` | 5000-step `val_ppl` | Notes |
+  |---|---|---|---|---|---|---|---|---|
+  | `gpt` | `45.95M` (`33.37M`) | `2,884 MB` | `~64,400` | `235.91` | `99.84` | **`3.9637`** | **`52.65`** | Overtakes `rpp` between 500–1,000 steps via full $512\times 512$ causal attention |
+  | `rpp` | `46.10M` (`33.52M`) | **`1,370 MB`** | `~26,900` | **`232.52`** | `110.24` | **`4.0699`** | **`58.55`** | Leads at step 500 (and 1,500-step cosine `122.15 < 124.04`); `povm_scale: 12.0 -> 25.41`, **2.1× less VRAM**, $O(T)$ global scaling |
+  - `kcw` 5k running live (`~37.9k tok/s`, `R_order = 0.315`), followed by `ldg` 5k and `rmsn` (`Omega = 4/5`) 5k.
 
 ---
 
