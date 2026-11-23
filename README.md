@@ -113,8 +113,13 @@ Adding `1`, `2`, `5`, or all `10` global causal layers inside the exact same **`
 | **`rpp` (`W=128`)** | None (`0/10`) | `1,370 MB` | `~27,900` | `3.7636` / `43.10` | **`3.7123` / `40.95`** | Pure local `W=128` + OU scan + Born-POVM baseline |
 | **`rpp_bridge_1g`** | `L9` (`1/10`) | **`1,376 MB`** | `~27,700` | `3.7363` / `41.94` | **`3.6845` / `39.83`** | **Pareto sweet spot (`+6 MB`, sub-40 PPL):** captures **89%** of the total global-attention gain (`-1.12` of `-1.26 PPL`) right before POVM readout |
 | **`rpp_bridge_2g`** | `L4 + L9` (`2/10`) | **`1,376 MB`** | `~27,300` | `3.7346` / `41.87` | **`3.6833` / `39.78`** | Saturates `-0.05 PPL` past `1g` (`L4` global writes only enter `q` via diagonal OU) |
-| **`rpp_bridge_5g`** | `L1,3,5,7,9` (`5/10`) | `1,378 MB` | `~27,400` | *Running...* | *Running...* | Filling `5/10` Pareto point (`~48m`) |
-| **`rpp_global_all`** | All (`10/10`) | **`1,379 MB`** | **`~28,400`** | `3.7341` / `41.85` | **`3.6810` / `39.69`** | **Definitive ceiling (`-0.14 PPL` vs `1g`):** proves the remaining `2.31 PPL` (`0.0598 nat`) gap to `gpt` is **100% structural** (`ffn_dim=480` bottleneck / `(q,p)` split), NOT attention window! |
+| **`rpp_bridge_5g`** | `L1,3,5,7,9` (`5/10`) | **`1,378 MB`** | `~27,700` | **`3.7274` / `41.57`** | **`3.6752` / `39.46`** | **Best RPP variant so far — BEATS `global_all` (`39.69`) by `-0.23 PPL`!** Alternating local `W=128` + global forms an optimal hybrid U-curve |
+| **`rpp_global_all`** | All (`10/10`) | **`1,379 MB`** | **`~28,400`** | `3.7341` / `41.85` | **`3.6810` / `39.69`** | **Definitive saturation:** remaining `2.31 PPL` (`0.0598 nat`) gap to `gpt` is **structural** (`ffn_dim=480` bottleneck / `(q,p)` split), motivating `v0.7` |
+
+### v0.7 Symplectic Wide-FFN Interleaving (`p19285`, Now Running)
+Tests whether eliminating `F(p)`'s split `480`-dim FFN (`f_ffn_dim=0`, pure Causal Attention) and consolidating associative capacity into a **2× wider SwiGLU (`g_ffn_dim=960`)** inside `G(q)` (`OU + Wide-SwiGLU`, **`46.09M` exact parity**, `~1.38 GB` VRAM) closes the remaining structural gap to `gpt` (`37.38 PPL`).
+- **`rpp_symp_ffn_1g`**: `W=128` + `L9` global (`10k`, `81.92M` tokens)
+- **`rpp_symp_ffn_global`**: `10/10` global (`10k`, `81.92M` tokens)
 
 ---
 
@@ -134,4 +139,6 @@ PYTHONPATH=. python3 train_smoke.py --arch rpp_bridge_1g --window 128 --steps 10
 PYTHONPATH=. python3 train_smoke.py --arch rpp_bridge_2g --window 128 --steps 10000 --data /workspace/rmsn_data/tokens_wiki103_full.pt --out runs/v05_10k_rpp_bridge_2g
 PYTHONPATH=. python3 train_smoke.py --arch rpp_bridge_5g --window 128 --steps 10000 --data /workspace/rmsn_data/tokens_wiki103_full.pt --out runs/v06_10k_rpp_bridge_5g
 PYTHONPATH=. python3 train_smoke.py --arch rpp_global_all --window 0 --steps 10000 --data /workspace/rmsn_data/tokens_wiki103_full.pt --out runs/v06_10k_rpp_global_all
+PYTHONPATH=. python3 train_smoke.py --arch rpp_symp_ffn_1g --window 128 --steps 10000 --data /workspace/rmsn_data/tokens_wiki103_full.pt --out runs/v07_10k_rpp_symp_ffn_1g
+PYTHONPATH=. python3 train_smoke.py --arch rpp_symp_ffn_global --window 0 --steps 10000 --data /workspace/rmsn_data/tokens_wiki103_full.pt --out runs/v07_10k_rpp_symp_ffn_global
 ```
