@@ -99,12 +99,17 @@ All models share an identical **factorized tied `49152 → 256` embedding bottle
 | 7 | **`kcw`** | `45.65M` (`33.07M`) | `6,583 MB` | `~38,000` | `4.3669` / `78.80` | **`4.3288` / `75.86`** | Non-attention complex harmonic + Kuramoto phase lock held `R_order = 0.3223` (`0` NaNs across 40.96M tokens) |
 | 8 | **`rmsn`** (`Ω=4/5`) | `49.28M` (`36.69M`) | `19,599 MB` | `~11,500` | `4.5935` / `98.84` | **`4.5618` / `95.75`** | `lyap` locked TRUE SILENT `-0.00104`, `ws_entropy: 4.382 -> 1.757` (soliton condensation confirmed!) |
 
-### 10,000-Step (`81.92M` tokens) Extended Showdown (`p19285`, In Progress)
+### 10,000-Step (`81.92M` tokens) Extended Showdown (`p19285`, Complete + Full-Val `774`-batch Verified)
 | Arch | Total (Backbone) | Peak VRAM | Speed (tok/s) | 40-batch `val_ce` / `val_ppl` | **Full 774-batch `val_ce` / `val_ppl`** | Key Finding |
 |---|---|---|---|---|---|---|
 | **`gpt`** | `45.95M` (`33.37M`) | `2,884 MB` | `~64,000` | `3.6615` / `38.92` | **`3.6212` / `37.38`** | Clean scaling (`-13.35 PPL` from 5k); global causal attention widens edge to `0.0911 nats` over local `W=128` |
 | **`rpp` (`W=128` + POVM)** | `46.10M` (`33.52M`) | **`1,370 MB`** | `~27,900` | `3.7636` / `43.10` | **`3.7123` / `40.95`** | **Smashes 5k GPT (`50.73`) by nearly 10 PPL at `2.1×` less VRAM** (`povm_scale -> 38.53`, `-12.63 PPL` from 5k, `0` NaNs) |
-| **`rmsn`** (`Ω=4/5`) | `49.28M` (`36.69M`) | `19,599 MB` | `~11,500` | *Running...* | *Running...* | Launched `15:56Z`; tracking `ws_entropy` compression below `1.757` & semantic alignment |
+| **`rmsn`** (`Ω=4/5`) | `49.28M` (`36.69M`) | `19,599 MB` | `~11,500` | `4.2720` / `71.67` | **`4.2339` / `68.98`** | `-26.77 PPL` from 5k; `lyap` locked `-0.00100`, **`ws_entropy` stabilized at `1.52–1.64` (`~5.0` effective slots) from step 3,600–10,000**; fluent grammar without prompt domain-lock yet |
+
+### v0.5 `RPP-Bridge` Hypothesis (`p19285`, Now Running)
+Can **1 or 2 global causal layers** inside the reversible `(q,p)` Port-Hamiltonian stack eliminate the `0.0911 nat` (`3.57 PPL`) long-range retrieval gap to full-attention GPT while preserving **exact `46.10M` param parity** and `~1.4 GB` VRAM?
+- **`rpp_bridge_1g`**: `L0..L8` use `W=128` sliding-window + Dual-Timescale OU scan; **`L9` uses global causal attention** (`window=0`).
+- **`rpp_bridge_2g`**: **`L4 + L9` use global causal attention** (midpoint + output bridge); all other 8 layers remain `W=128`.
 
 ---
 
@@ -120,4 +125,6 @@ PYTHONPATH=. python3 train_smoke.py --arch ldg --data /workspace/rmsn_data/token
 PYTHONPATH=. python3 train_smoke.py --arch ldg_povm --data /workspace/rmsn_data/tokens_wiki103_full.pt --out runs/v02_ldg_povm
 PYTHONPATH=. python3 train_smoke.py --arch kcw --data /workspace/rmsn_data/tokens_wiki103_full.pt --out runs/v02_kcw
 PYTHONPATH=. python3 train_smoke.py --arch rpp --data /workspace/rmsn_data/tokens_wiki103_full.pt --out runs/v02_rpp
+PYTHONPATH=. python3 train_smoke.py --arch rpp_bridge_1g --window 128 --steps 10000 --data /workspace/rmsn_data/tokens_wiki103_full.pt --out runs/v05_10k_rpp_bridge_1g
+PYTHONPATH=. python3 train_smoke.py --arch rpp_bridge_2g --window 128 --steps 10000 --data /workspace/rmsn_data/tokens_wiki103_full.pt --out runs/v05_10k_rpp_bridge_2g
 ```
