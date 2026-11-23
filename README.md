@@ -91,7 +91,7 @@ All models share an identical **factorized tied `49152 → 256` embedding bottle
 | Rank | Arch | Total (Backbone) | Peak VRAM | Speed (tok/s) | 40-batch `val_ce` / `val_ppl` | **Full 774-batch `val_ce` / `val_ppl`** | Key Finding |
 |---|---|---|---|---|---|---|---|
 | 1 | `gpt` | `45.95M` (`33.37M`) | `2,884 MB` | `~64,400` | `3.9637` / `52.65` | **`3.9266` / `50.73`** | $O(T^2)$ exact causal attention overtakes after step 500–1,000 |
-| 2 | **`rpp` (`W=128` + POVM)** | `46.10M` (`33.52M`) | **`1,370 MB`** | **`~27,700`** | **`4.0228` / `55.86`** | **`3.9866` / `53.87`** | **Zero extra params/VRAM vs `W=64`, closes 42% of gap to GPT (`-2.30 PPL`)** with faster speed and `2.1×` less VRAM than GPT (`povm_scale -> 25.42`) |
+| 2 | **`rpp` (`W=128` + POVM)** | `46.10M` (`33.52M`) | **`1,370 MB`** | **`~27,700`** | **`4.0228` / `55.86`** | **`3.9811` / `53.58`** | **Zero extra params/VRAM vs `W=64`, closes 48% of gap to GPT (`-2.59 PPL`)** with faster speed and `2.1×` less VRAM than GPT (`povm_scale -> 25.42`) |
 | 3 | **`rpp`** (`W=64` + POVM) | `46.10M` (`33.52M`) | **`1,370 MB`** | `~26,900` | `4.0699` / `58.55` | **`4.0284` / `56.17`** | **Beats linear-head `rpp_lin` by `-1.04 PPL` on full val**; `2.1×` less VRAM than GPT, leads early (`122.15 < 124.04` at 1.5k) |
 | 4 | `rpp_lin` (`W=64` + Linear) | `46.10M` (`33.52M`) | **`1,174 MB`** | `~36,000` | `4.0835` / `59.35` | **`4.0468` / `57.21`** | Controlled head ablation: linear softmax starts faster (`210.96` vs `232.52` at 500) before Born POVM overtakes at step ~2,000–2,500 |
 | 5 | **`ldg`** | `45.69M` (`33.11M`) | `9,525 MB` | `~20,700` | `4.2524` / `70.27` | **`4.2175` / `67.87`** | Pure linear $O(T)$ (`0` attention); `kappa: 3.8065 -> 4.1623`, `{S,E} <= 9e-5`, `ds_dt -> 58.84`, `tssp -> 0.249` |
