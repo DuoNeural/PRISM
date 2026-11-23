@@ -116,12 +116,17 @@ Adding `1`, `2`, `5`, or all `10` global causal layers inside the exact same **`
 | **`rpp_bridge_5g`** | `L1,3,5,7,9` (`5/10`) | **`1,378 MB`** | `~27,700` | **`3.7274` / `41.57`** | **`3.6752` / `39.46`** | **Best RPP variant so far — BEATS `global_all` (`39.69`) by `-0.23 PPL`!** Alternating local `W=128` + global forms an optimal hybrid U-curve |
 | **`rpp_global_all`** | All (`10/10`) | **`1,379 MB`** | **`~28,400`** | `3.7341` / `41.85` | **`3.6810` / `39.69`** | **Definitive saturation:** remaining `2.31 PPL` (`0.0598 nat`) gap to `gpt` is **structural** (`ffn_dim=480` bottleneck / `(q,p)` split), motivating `v0.7` |
 
-### v0.7 Symplectic Wide-FFN Interleaving (`p19285`, In Progress)
+### v0.7 Symplectic Wide-FFN Interleaving (`p19285`, Complete `2×2` Falsification)
 Tests whether eliminating `F(p)`'s split `480`-dim FFN (`f_ffn_dim=0`, pure Causal Attention) and consolidating associative capacity into a **2× wider SwiGLU (`g_ffn_dim=960`)** inside `G(q)` (`OU + Wide-SwiGLU`, **`46.09M` exact parity**, `~1.38 GB` VRAM) closes the remaining structural gap to `gpt` (`37.38 PPL`).
 | Arch | Global Layers | Peak VRAM | Speed (tok/s) | 40-batch `val_ce` / `val_ppl` | **Full 774-batch `val_ce` / `val_ppl`** | Key Finding |
 |---|---|---|---|---|---|---|
 | **`rpp_symp_ffn_1g`** | `L9` (`1/10`) | `1,377 MB` | **`~30,300`** | `3.7565` / `42.80` | **`3.7042` / `40.62`** | **Falsified (`+0.79 PPL` vs `rpp_bridge_1g` `39.83`):** `+10%` faster, but removing `F(p)`'s nonlinear FFN starves `q`-stream mixing (`stream_q_rms` drops `0.74` vs `p`'s `2.69`) |
-| **`rpp_symp_ffn_global`** | All (`10/10`) | `1,379 MB` | **`~30,600`** | *Running...* | *Running...* | Launched `22:34Z` (`~43m`) to complete the `2×2` FFN ablation |
+| **`rpp_symp_ffn_global`** | All (`10/10`) | `1,379 MB` | **`~30,600`** | `3.7585` / `42.88` | **`3.7054` / `40.67`** | **Confirmed falsification (`+0.98 PPL` vs `rpp_global_all` `39.69`):** proves BOTH `q` and `p` streams require nonlinear FFN channel mixing |
+
+### v0.8 Exact Symplectic Givens `(q,p)` Mixing + Compact-OU Wide FFN (`p19285`, Now Running)
+Builds directly on top of **`rpp_bridge_5g`** (`39.46 PPL` champion) without starving either stream:
+- **`rpp_5g_symp_mix`** (`46.10M`): Exact `rpp_bridge_5g` + learnable per-channel **Symplectic Givens Rotation $R(\theta)$** (`+5,120` params, exact inverse $R(-\theta)=R(\theta)^T$, `0 MB` extra VRAM) mixing `(q, p)` phase coordinates every layer.
+- **`rpp_5g_wide_ou`** (`46.10M`): `rpp_5g_symp_mix` + compact **`d_scan=128` OU scan** freeing `~5.9M` OU projection params to widen **BOTH** `F(p)` and `G(q)` SwiGLUs by `+40%` (`f_ffn_dim = g_ffn_dim = 672`).
 
 ---
 
@@ -143,4 +148,6 @@ PYTHONPATH=. python3 train_smoke.py --arch rpp_bridge_5g --window 128 --steps 10
 PYTHONPATH=. python3 train_smoke.py --arch rpp_global_all --window 0 --steps 10000 --data /workspace/rmsn_data/tokens_wiki103_full.pt --out runs/v06_10k_rpp_global_all
 PYTHONPATH=. python3 train_smoke.py --arch rpp_symp_ffn_1g --window 128 --steps 10000 --data /workspace/rmsn_data/tokens_wiki103_full.pt --out runs/v07_10k_rpp_symp_ffn_1g
 PYTHONPATH=. python3 train_smoke.py --arch rpp_symp_ffn_global --window 0 --steps 10000 --data /workspace/rmsn_data/tokens_wiki103_full.pt --out runs/v07_10k_rpp_symp_ffn_global
+PYTHONPATH=. python3 train_smoke.py --arch rpp_5g_symp_mix --window 128 --steps 10000 --data /workspace/rmsn_data/tokens_wiki103_full.pt --out runs/v08_10k_rpp_5g_symp_mix
+PYTHONPATH=. python3 train_smoke.py --arch rpp_5g_wide_ou --window 128 --steps 10000 --data /workspace/rmsn_data/tokens_wiki103_full.pt --out runs/v08_10k_rpp_5g_wide_ou
 ```

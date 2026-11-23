@@ -200,6 +200,64 @@ def test_rpp_reversible_drift_and_grad():
     loss.backward()
     assert m.head.tau_povm.grad is not None and torch.isfinite(m.head.tau_povm.grad)
 
+    # Verify Symplectic Givens rotation R(theta) + compact d_scan reversible drift & gradient parity
+    m_mix = RPPLM(
+        vocab_size=256, d_emb=32, d_model=D, n_layers=6, n_heads=H,
+        f_ffn_dim=160, g_ffn_dim=160, d_scan=64, use_symp_mix=True, max_seq_len=T,
+    ).to(dev)
+    with torch.no_grad():
+        for th in m_mix.mix_thetas:
+            th.copy_(0.35 * torch.randn_like(th))
+    emb_m = m_mix.embed(x)
+    qm0 = m_mix.emb_up_q(emb_m).float().detach()
+    pm0 = m_mix.emb_up_p(emb_m).float().detach()
+    qc, pc = qm0.clone(), pm0.clone()
+    with torch.no_grad():
+        for fb, gb, th in zip(m_mix.f_blocks, m_mix.g_blocks, m_mix.mix_thetas):
+            with torch.amp.autocast("cuda", dtype=torch.bfloat16, enabled=dev.type == "cuda"):
+                fo = fb(pc, m_mix.rope_cos, m_mix.rope_sin).float()
+            q_mid = qc + fo
+            with torch.amp.autocast("cuda", dtype=torch.bfloat16, enabled=dev.type == "cuda"):
+                go = gb(q_mid).float()
+            p_mid = pc + go
+            c, s = torch.cos(th.float()), torch.sin(th.float())
+            qc, pc = c * q_mid - s * p_mid, s * q_mid + c * p_mid
+        for fb, gb, th in reversed(list(zip(m_mix.f_blocks, m_mix.g_blocks, m_mix.mix_thetas))):
+            c, s = torch.cos(th.float()), torch.sin(th.float())
+            q_mid, p_mid = c * qc + s * pc, -s * qc + c * pc
+            with torch.amp.autocast("cuda", dtype=torch.bfloat16, enabled=dev.type == "cuda"):
+                go = gb(q_mid).float()
+            pc = p_mid - go
+            with torch.amp.autocast("cuda", dtype=torch.bfloat16, enabled=dev.type == "cuda"):
+                fo = fb(pc, m_mix.rope_cos, m_mix.rope_sin).float()
+            qc = q_mid - fo
+    mix_drift = max((qc - qm0).abs().max().item(), (pc - pm0).abs().max().item())
+    print(f"[RPP Symp-Mix Drift] 6-layer max drift={mix_drift:.2e}")
+    assert mix_drift < 1e-4, f"Symp-Mix reversible drift too high: {mix_drift}"
+
+    loss_rev, _ = m_mix(x, y)
+    loss_rev.backward()
+    g_rev_th = [th.grad.clone() for th in m_mix.mix_thetas]
+    g_rev_w2 = m_mix.g_blocks[0].w2.weight.grad.clone()
+    m_mix.zero_grad()
+
+    # Exact non-reversible autograd reference
+    emb_u = m_mix.embed(x)
+    qu, pu = m_mix.emb_up_q(emb_u).float(), m_mix.emb_up_p(emb_u).float()
+    for fb, gb, th in zip(m_mix.f_blocks, m_mix.g_blocks, m_mix.mix_thetas):
+        with torch.amp.autocast("cuda", dtype=torch.bfloat16, enabled=dev.type == "cuda"):
+            qu = qu + fb(pu, m_mix.rope_cos, m_mix.rope_sin).float()
+            pu = pu + gb(qu).float()
+        c, s = torch.cos(th.float()), torch.sin(th.float())
+        qu, pu = c * qu - s * pu, s * qu + c * pu
+    hu = m_mix.norm_out(0.5 * (qu + pu))
+    loss_ref = m_mix.head.forward_loss(hu, m_mix.embed.weight, y)
+    loss_ref.backward()
+    th_err = max((a - b.grad).abs().max().item() for a, b in zip(g_rev_th, m_mix.mix_thetas))
+    w2_err = (g_rev_w2 - m_mix.g_blocks[0].w2.weight.grad).abs().max().item()
+    print(f"[RPP Symp-Mix Grad Parity] theta_err={th_err:.2e} w2_err={w2_err:.2e}")
+    assert max(th_err, w2_err) < 1e-4, f"Symp-Mix grad parity failed: theta={th_err}, w2={w2_err}"
+
 
 def test_param_parity_and_step0():
     dev = _get_device()
@@ -220,6 +278,8 @@ def test_param_parity_and_step0():
         "rpp_global_all": RPPLM(window=0, global_layers=tuple(range(10)), use_hybrid_delta=False, use_povm_head=True),
         "rpp_symp_ffn_1g": RPPLM(window=128, global_layers=(9,), f_ffn_dim=0, g_ffn_dim=960, use_hybrid_delta=False, use_povm_head=True),
         "rpp_symp_ffn_global": RPPLM(window=0, global_layers=tuple(range(10)), f_ffn_dim=0, g_ffn_dim=960, use_hybrid_delta=False, use_povm_head=True),
+        "rpp_5g_symp_mix": RPPLM(window=128, global_layers=(1, 3, 5, 7, 9), use_symp_mix=True, use_hybrid_delta=False, use_povm_head=True),
+        "rpp_5g_wide_ou": RPPLM(window=128, global_layers=(1, 3, 5, 7, 9), f_ffn_dim=672, g_ffn_dim=672, d_scan=128, use_symp_mix=True, use_hybrid_delta=False, use_povm_head=True),
         "rpp_lin": RPPLM(use_hybrid_delta=False, use_povm_head=False),
         "rpp_delta": RPPLM(use_hybrid_delta=True),
         "rmsn": RMSNOmega45LM(),

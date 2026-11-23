@@ -114,18 +114,19 @@ class WindowAttnSubBlock(nn.Module):
 
 class DualTimescaleScanSubBlock(nn.Module):
     """G(q): Dual-Timescale Unital OU Triton Scan (Fast/Slow ordered poles) + SwiGLU."""
-    def __init__(self, d_model: int, n_heads: int = 8, ffn_dim: int = 768):
+    def __init__(self, d_model: int, n_heads: int = 8, ffn_dim: int = 768, d_scan: int = None):
         super().__init__()
         self.d_model = d_model
+        self.d_scan = d_model if d_scan is None else d_scan
         self.n_heads = n_heads
-        self.head_dim = d_model // n_heads
+        self.head_dim = self.d_scan // n_heads
         self.n_osc = self.head_dim // 2
         self.h_half = n_heads // 2  # half fast heads, half slow heads
 
         self.norm1 = RMSNorm(d_model)
-        self.drive_proj = nn.Linear(d_model, d_model, bias=False)
-        self.gate_proj = nn.Linear(d_model, d_model, bias=False)
-        self.o_proj = nn.Linear(d_model, d_model, bias=False)
+        self.drive_proj = nn.Linear(d_model, self.d_scan, bias=False)
+        self.gate_proj = nn.Linear(d_model, self.d_scan, bias=False)
+        self.o_proj = nn.Linear(self.d_scan, d_model, bias=False)
 
         # Strictly ordered disjoint decay rates:
         # Fast: gamma in [1/32, 1.0] (tau_f in [1, 32])
@@ -139,7 +140,7 @@ class DualTimescaleScanSubBlock(nn.Module):
         self.w2 = nn.Linear(ffn_dim, d_model, bias=False)
 
     def forward(self, q: torch.Tensor) -> torch.Tensor:
-        B, T, D = q.shape
+        B, T, _ = q.shape
         H, M = self.n_heads, self.n_osc
         h = self.norm1(q)
         u_pair = F.silu(self.drive_proj(h)).view(B, T, H, self.head_dim).float()
@@ -156,7 +157,7 @@ class DualTimescaleScanSubBlock(nn.Module):
         # Exact OU / ZOH drive scaling sqrt(1 - a^2) = sqrt(-expm1(2 * log_decay))
         ou_gain = torch.sqrt((-torch.expm1(2.0 * log_decay)).clamp(min=1e-6))
         s_r, s_i = complex_linear_scan(log_decay, phase, u_r * ou_gain, u_i * ou_gain)
-        s_out = torch.cat([s_r, s_i], dim=-1).view(B, T, D).to(q.dtype)
+        s_out = torch.cat([s_r, s_i], dim=-1).view(B, T, self.d_scan).to(q.dtype)
 
         delta = self.o_proj(F.silu(self.gate_proj(h)) * s_out)
         h2 = self.norm2(q + delta)
@@ -223,34 +224,64 @@ class DeltaSubBlock(nn.Module):
 
 class _ReversiblePortBlockFn(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, q_in, p_in, f_blk, g_blk, rope_cos, rope_sin, *params):
+    def forward(ctx, q_in, p_in, f_blk, g_blk, rope_cos, rope_sin, mix_theta, *params):
         ctx.f_blk = f_blk
         ctx.g_blk = g_blk
+        ctx.has_mix = mix_theta is not None
         with torch.no_grad():
             with torch.amp.autocast("cuda", dtype=torch.bfloat16, enabled=q_in.is_cuda):
                 f_out = f_blk(p_in, rope_cos, rope_sin).float()
-            q_out = q_in.float() + f_out
+            q_mid = q_in.float() + f_out
             with torch.amp.autocast("cuda", dtype=torch.bfloat16, enabled=q_in.is_cuda):
-                g_out = (g_blk(q_out, rope_cos, rope_sin) if isinstance(g_blk, DeltaSubBlock) else g_blk(q_out)).float()
-            p_out = p_in.float() + g_out
+                g_out = (g_blk(q_mid, rope_cos, rope_sin) if isinstance(g_blk, DeltaSubBlock) else g_blk(q_mid)).float()
+            p_mid = p_in.float() + g_out
+            if ctx.has_mix:
+                c = torch.cos(mix_theta.float())
+                s = torch.sin(mix_theta.float())
+                q_out = c * q_mid - s * p_mid
+                p_out = s * q_mid + c * p_mid
+                ctx.save_for_backward(q_out.detach(), p_out.detach(), rope_cos, rope_sin, mix_theta)
+            else:
+                q_out, p_out = q_mid, p_mid
+                ctx.save_for_backward(q_out.detach(), p_out.detach(), rope_cos, rope_sin)
 
-        ctx.save_for_backward(q_out.detach(), p_out.detach(), rope_cos, rope_sin)
         return q_out, p_out
 
     @staticmethod
     def backward(ctx, dq_out, dp_out):
-        q_out, p_out, rope_cos, rope_sin = ctx.saved_tensors
+        if ctx.has_mix:
+            q_out, p_out, rope_cos, rope_sin, mix_theta = ctx.saved_tensors
+            with torch.no_grad():
+                c = torch.cos(mix_theta.float())
+                s = torch.sin(mix_theta.float())
+                q_mid = c * q_out + s * p_out
+                p_mid = -s * q_out + c * p_out
+            with torch.enable_grad():
+                q_r = q_mid.detach().requires_grad_(True)
+                p_r = p_mid.detach().requires_grad_(True)
+                c_g = torch.cos(mix_theta.float())
+                s_g = torch.sin(mix_theta.float())
+                qo_g = c_g * q_r - s_g * p_r
+                po_g = s_g * q_r + c_g * p_r
+                dq_mid_rot, dp_mid_rot, d_theta = torch.autograd.grad(
+                    (qo_g, po_g), (q_r, p_r, mix_theta), (dq_out, dp_out)
+                )
+        else:
+            q_out, p_out, rope_cos, rope_sin = ctx.saved_tensors
+            q_mid, p_mid = q_out, p_out
+            dq_mid_rot, dp_mid_rot, d_theta = dq_out, dp_out, None
+
         f_blk, g_blk = ctx.f_blk, ctx.g_blk
 
         with torch.enable_grad():
-            q_tmp = q_out.detach().requires_grad_(True)
-            with torch.amp.autocast("cuda", dtype=torch.bfloat16, enabled=q_out.is_cuda):
+            q_tmp = q_mid.detach().requires_grad_(True)
+            with torch.amp.autocast("cuda", dtype=torch.bfloat16, enabled=q_mid.is_cuda):
                 g_out = (g_blk(q_tmp, rope_cos, rope_sin) if isinstance(g_blk, DeltaSubBlock) else g_blk(q_tmp)).float()
-            p_in = (p_out.detach() - g_out.detach())
+            p_in = (p_mid.detach() - g_out.detach())
 
             g_params = list(g_blk.parameters())
-            g_grads = torch.autograd.grad(g_out, [q_tmp] + g_params, dp_out, allow_unused=True)
-            dq_mid = dq_out + g_grads[0]
+            g_grads = torch.autograd.grad(g_out, [q_tmp] + g_params, dp_mid_rot, allow_unused=True)
+            dq_mid = dq_mid_rot + g_grads[0]
             dg_params = g_grads[1:]
 
             p_tmp = p_in.detach().requires_grad_(True)
@@ -258,10 +289,10 @@ class _ReversiblePortBlockFn(torch.autograd.Function):
                 f_out = f_blk(p_tmp, rope_cos, rope_sin).float()
             f_params = list(f_blk.parameters())
             f_grads = torch.autograd.grad(f_out, [p_tmp] + f_params, dq_mid, allow_unused=True)
-            dp_in = dp_out + f_grads[0]
+            dp_in = dp_mid_rot + f_grads[0]
             df_params = f_grads[1:]
 
-        return (dq_mid, dp_in, None, None, None, None) + tuple(df_params) + tuple(dg_params)
+        return (dq_mid, dp_in, None, None, None, None, d_theta) + tuple(df_params) + tuple(dg_params)
 
 
 class RPPLM(nn.Module):
@@ -277,6 +308,8 @@ class RPPLM(nn.Module):
         ffn_dim: int = 480,
         f_ffn_dim: int = None,
         g_ffn_dim: int = None,
+        d_scan: int = None,
+        use_symp_mix: bool = False,
         max_seq_len: int = 1024,
         use_hybrid_delta: bool = False,
         use_povm_head: bool = True,
@@ -286,6 +319,7 @@ class RPPLM(nn.Module):
         self.d_emb = d_emb
         self.d_model = d_model
         self.global_layers = tuple(sorted(set(global_layers or ())))
+        self.use_symp_mix = use_symp_mix
         self.use_hybrid_delta = use_hybrid_delta
         self.use_povm_head = use_povm_head
 
@@ -305,9 +339,13 @@ class RPPLM(nn.Module):
         self.g_blocks = nn.ModuleList([
             DeltaSubBlock(d_model, n_heads=n_heads, chunk_size=window, ffn_dim=320)
             if (use_hybrid_delta and i % 2 == 0)
-            else DualTimescaleScanSubBlock(d_model, n_heads=n_heads, ffn_dim=g_ffn)
+            else DualTimescaleScanSubBlock(d_model, n_heads=n_heads, ffn_dim=g_ffn, d_scan=d_scan)
             for i in range(n_layers)
         ])
+        self.mix_thetas = (
+            nn.ParameterList([nn.Parameter(torch.zeros(d_model)) for _ in range(n_layers)])
+            if use_symp_mix else None
+        )
         self.norm_out = RMSNorm(d_model)
         if use_povm_head:
             self.head = BornLogPOVMHead(d_model, d_emb, init_scale=12.0, eps=1e-6, chunk_size=128, mode="amplitude")
@@ -337,9 +375,10 @@ class RPPLM(nn.Module):
         emb = self.embed(input_ids)
         q = self.emb_up_q(emb).float()
         p = self.emb_up_p(emb).float()
-        for fb, gb in zip(self.f_blocks, self.g_blocks):
+        for idx, (fb, gb) in enumerate(zip(self.f_blocks, self.g_blocks)):
+            th = self.mix_thetas[idx] if self.mix_thetas is not None else None
             params = list(fb.parameters()) + list(gb.parameters())
-            q, p = _ReversiblePortBlockFn.apply(q, p, fb, gb, self.rope_cos, self.rope_sin, *params)
+            q, p = _ReversiblePortBlockFn.apply(q, p, fb, gb, self.rope_cos, self.rope_sin, th, *params)
         return q, p
 
     def forward_hidden(self, input_ids: torch.Tensor):
