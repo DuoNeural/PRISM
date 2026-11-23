@@ -227,7 +227,7 @@ def main():
             is_best = val_ce < best_val_ce
             if is_best:
                 best_val_ce = val_ce
-                torch.save({"step": step, "arch": args.arch, "model": model.state_dict(), "val_ce": val_ce, "val_ppl": val_ppl}, out_dir / "best.pt")
+                torch.save({"step": step, "arch": args.arch, "window": args.window, "model": model.state_dict(), "val_ce": val_ce, "val_ppl": val_ppl}, out_dir / "best.pt")
             log(f"EVAL step={step:4d} | val_ce={val_ce:.4f} val_ppl={val_ppl:.2f} | best_ppl={math.exp(min(best_val_ce,20)):.2f} | skipped_nan={skipped_nan}")
             with open(metrics_path, "a") as mf:
                 mf.write(json.dumps({"step": step, "eval": True, "val_ce": val_ce, "val_ppl": val_ppl, "best_val_ce": best_val_ce}) + "\n")

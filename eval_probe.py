@@ -55,6 +55,7 @@ def main():
     p.add_argument("--data", default="/workspace/rmsn_data/tokens_wiki103_full.pt")
     p.add_argument("--tokenizer", default="HuggingFaceTB/cosmo2-tokenizer")
     p.add_argument("--cache-dir", default="/workspace/rmsn_data/hf")
+    p.add_argument("--window", type=int, default=None, help="Override sliding window if not saved in checkpoint")
     p.add_argument("--runs", nargs="+", required=True, help="List of run dirs with best.pt")
     args = p.parse_args()
 
@@ -77,7 +78,8 @@ def main():
             continue
         ckpt = torch.load(ckpt_path, map_location="cpu")
         arch = ckpt["arch"]
-        model = build_model(arch, vocab=49152, seq_len=512).to(device)
+        win = args.window if args.window is not None else ckpt.get("window", 64)
+        model = build_model(arch, vocab=49152, seq_len=512, window=win).to(device)
         model.load_state_dict(ckpt["model"])
         ce, ppl, nb = full_val_eval(model, val_tokens, seq_len=512, batch_size=16, device=device)
         print(f"\n=== {rdir} (arch={arch}, step={ckpt['step']}) | FULL VAL ({nb} batches): CE={ce:.4f} PPL={ppl:.2f} ===")
