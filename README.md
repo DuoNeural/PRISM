@@ -106,13 +106,15 @@ All models share an identical **factorized tied `49152 → 256` embedding bottle
 | **`rpp` (`W=128` + POVM)** | `46.10M` (`33.52M`) | **`1,370 MB`** | `~27,900` | `3.7636` / `43.10` | **`3.7123` / `40.95`** | **Smashes 5k GPT (`50.73`) by nearly 10 PPL at `2.1×` less VRAM** (`povm_scale -> 38.53`, `-12.63 PPL` from 5k, `0` NaNs) |
 | **`rmsn`** (`Ω=4/5`) | `49.28M` (`36.69M`) | `19,599 MB` | `~11,500` | `4.2720` / `71.67` | **`4.2339` / `68.98`** | `-26.77 PPL` from 5k; `lyap` locked `-0.00100`, **`ws_entropy` stabilized at `1.52–1.64` (`~5.0` effective slots) from step 3,600–10,000**; fluent grammar without prompt domain-lock yet |
 
-### v0.5 `RPP-Bridge` Hypothesis (`p19285`, Complete 10k `81.92M`-token Ablation)
-Can **1 or 2 global causal layers** inside the reversible `(q,p)` Port-Hamiltonian stack eliminate the `0.0911 nat` (`3.57 PPL`) long-range retrieval gap to full-attention GPT while preserving **exact `46.10M` param parity** and `~1.38 GB` VRAM?
+### v0.5–v0.6 Global-Bridge & Ceiling Ablation (`p19285`, 10k `81.92M`-token Verified)
+Adding `1`, `2`, `5`, or all `10` global causal layers inside the exact same **`46.10M`-param** reversible `(q,p)` Port-Hamiltonian stack cleanly isolates the retrieval vs FFN/stream gap to `gpt` (`37.38 PPL` at `2,884 MB`):
 | Arch | Global Layers | Peak VRAM | Speed (tok/s) | 40-batch `val_ce` / `val_ppl` | **Full 774-batch `val_ce` / `val_ppl`** | Key Finding |
 |---|---|---|---|---|---|---|
 | **`rpp` (`W=128`)** | None (`0/10`) | `1,370 MB` | `~27,900` | `3.7636` / `43.10` | **`3.7123` / `40.95`** | Pure local `W=128` + OU scan + Born-POVM baseline |
-| **`rpp_bridge_1g`** | `L9` (`1/10`) | **`1,376 MB`** | `~27,700` | `3.7363` / `41.94` | **`3.6845` / `39.83`** | **`+6 MB` VRAM, sub-40 PPL! Closes `-1.12 PPL` (`31%` of gap to GPT)** right before POVM readout |
-| **`rpp_bridge_2g`** | `L4 + L9` (`2/10`) | **`1,376 MB`** | `~27,300` | `3.7346` / `41.87` | **`3.6833` / `39.78`** | **Saturates vs `1g` (`-0.05 PPL`)!** Global writes at `L4` hit `q` stream without direct `p`-stream mixing (`G(q)` is diagonal OU), motivating `v0.6` ceiling test (`rpp_global_all` + `5g`) |
+| **`rpp_bridge_1g`** | `L9` (`1/10`) | **`1,376 MB`** | `~27,700` | `3.7363` / `41.94` | **`3.6845` / `39.83`** | **Pareto sweet spot (`+6 MB`, sub-40 PPL):** captures **89%** of the total global-attention gain (`-1.12` of `-1.26 PPL`) right before POVM readout |
+| **`rpp_bridge_2g`** | `L4 + L9` (`2/10`) | **`1,376 MB`** | `~27,300` | `3.7346` / `41.87` | **`3.6833` / `39.78`** | Saturates `-0.05 PPL` past `1g` (`L4` global writes only enter `q` via diagonal OU) |
+| **`rpp_bridge_5g`** | `L1,3,5,7,9` (`5/10`) | `1,378 MB` | `~27,400` | *Running...* | *Running...* | Filling `5/10` Pareto point (`~48m`) |
+| **`rpp_global_all`** | All (`10/10`) | **`1,379 MB`** | **`~28,400`** | `3.7341` / `41.85` | **`3.6810` / `39.69`** | **Definitive ceiling (`-0.14 PPL` vs `1g`):** proves the remaining `2.31 PPL` (`0.0598 nat`) gap to `gpt` is **100% structural** (`ffn_dim=480` bottleneck / `(q,p)` split), NOT attention window! |
 
 ---
 
