@@ -62,8 +62,15 @@ def chunked_wy_delta_scan(
     """
     B, T, H, dk = q.shape
     dv = v.shape[-1]
-    assert T % chunk_size == 0
-    NC = T // chunk_size
+    pad_t = (chunk_size - (T % chunk_size)) % chunk_size
+    if pad_t > 0:
+        q = F.pad(q, (0, 0, 0, 0, 0, pad_t))
+        k_hat = F.pad(k_hat, (0, 0, 0, 0, 0, pad_t))
+        v = F.pad(v, (0, 0, 0, 0, 0, pad_t))
+        alpha = F.pad(alpha, (0, 0, 0, pad_t), value=1.0)
+        beta = F.pad(beta, (0, 0, 0, pad_t), value=0.0)
+    T_pad = T + pad_t
+    NC = T_pad // chunk_size
     C = chunk_size
 
     # Reshape into [B, NC, H, C, d] strictly in FP32
@@ -139,7 +146,7 @@ def chunked_wy_delta_scan(
                 state_norms.append(S_curr.pow(2).sum(dim=(-1, -2)).sqrt().mean())
 
     out = torch.stack(outputs, dim=1)  # [B, NC, H, C, dv]
-    out = out.permute(0, 1, 3, 2, 4).contiguous().view(B, T, H, dv)
+    out = out.permute(0, 1, 3, 2, 4).contiguous().view(B, T_pad, H, dv)[:, :T].contiguous()
     mean_s_norm = torch.stack(state_norms).mean().item() if state_norms else 0.0
     return out.to(q.dtype), mean_s_norm
 

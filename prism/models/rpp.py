@@ -36,13 +36,18 @@ def sliding_window_causal_sdpa(q: torch.Tensor, k: torch.Tensor, v: torch.Tensor
         out = F.scaled_dot_product_attention(q.transpose(1, 2), k.transpose(1, 2), v.transpose(1, 2), attn_mask=mask)
         return out.transpose(1, 2).contiguous()
 
-    assert T % window == 0
-    NC = T // window
+    pad_t = (window - (T % window)) % window
+    if pad_t > 0:
+        q = F.pad(q, (0, 0, 0, 0, 0, pad_t))
+        k = F.pad(k, (0, 0, 0, 0, 0, pad_t))
+        v = F.pad(v, (0, 0, 0, 0, 0, pad_t))
+    T_pad = T + pad_t
+    NC = T_pad // window
     W = window
     # Pad previous chunk with zeros on the left for chunk 0
     pad_k = torch.zeros(B, W, H, dh, device=k.device, dtype=k.dtype)
     pad_v = torch.zeros(B, W, H, dh, device=v.device, dtype=v.dtype)
-    k_pad = torch.cat([pad_k, k], dim=1)  # [B, T+W, H, dh]
+    k_pad = torch.cat([pad_k, k], dim=1)  # [B, T_pad+W, H, dh]
     v_pad = torch.cat([pad_v, v], dim=1)
 
     # Gather [prev_W, curr_W] KV blocks for each query chunk c in 0..NC-1
@@ -62,7 +67,7 @@ def sliding_window_causal_sdpa(q: torch.Tensor, k: torch.Tensor, v: torch.Tensor
     win_mask = (kj <= qi) & ((qi - kj) < W)  # Every query row sees W valid keys (self j=qi always True!)
 
     out_win = F.scaled_dot_product_attention(q_win, k_win, v_win, attn_mask=win_mask)  # [B*NC, H, W, dh]
-    return out_win.transpose(1, 2).contiguous().view(B, T, H, dh)
+    return out_win.transpose(1, 2).contiguous().view(B, T_pad, H, dh)[:, :T].contiguous()
 
 
 class WindowAttnSubBlock(nn.Module):
