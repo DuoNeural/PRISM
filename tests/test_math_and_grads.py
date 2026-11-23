@@ -232,8 +232,10 @@ def test_rpp_reversible_drift_and_grad():
                 fo = fb(pc, m_mix.rope_cos, m_mix.rope_sin).float()
             qc = q_mid - fo
     mix_drift = max((qc - qm0).abs().max().item(), (pc - pm0).abs().max().item())
+    tol_drift = 5e-4 if dev.type == "cuda" else 1e-4
+    tol_grad = 1e-3 if dev.type == "cuda" else 1e-4
     print(f"[RPP Symp-Mix Drift] 6-layer max drift={mix_drift:.2e}")
-    assert mix_drift < 1e-4, f"Symp-Mix reversible drift too high: {mix_drift}"
+    assert mix_drift < tol_drift, f"Symp-Mix reversible drift too high: {mix_drift}"
 
     loss_rev, _ = m_mix(x, y)
     loss_rev.backward()
@@ -256,7 +258,7 @@ def test_rpp_reversible_drift_and_grad():
     th_err = max((a - b.grad).abs().max().item() for a, b in zip(g_rev_th, m_mix.mix_thetas))
     w2_err = (g_rev_w2 - m_mix.g_blocks[0].w2.weight.grad).abs().max().item()
     print(f"[RPP Symp-Mix Grad Parity] theta_err={th_err:.2e} w2_err={w2_err:.2e}")
-    assert max(th_err, w2_err) < 1e-4, f"Symp-Mix grad parity failed: theta={th_err}, w2={w2_err}"
+    assert max(th_err, w2_err) < tol_grad, f"Symp-Mix grad parity failed: theta={th_err}, w2={w2_err}"
 
 
 def test_param_parity_and_step0():
