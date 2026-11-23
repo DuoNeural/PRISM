@@ -71,12 +71,12 @@ class Muon(torch.optim.Optimizer):
 class HybridMuonAdamW:
     """Cleanly coordinates Muon + multi-group AdamW with independent base LR ratios."""
     PHYSICS_KEYWORDS = (
-        "log_c", "a_log", "gamma_raw", "omega_base", "alpha_landau",
-        "beta_landau", "tau_povm", "theta_fast", "theta_slow", "nernst_xi", "J_generic",
+        "a_log", "gamma_raw", "omega_base", "alpha_landau",
+        "beta_landau", "theta_fast", "theta_slow", "nernst_xi", "J_generic",
     )
     ADAMW_ONLY_KEYWORDS = (
         "embed", "emb_up", "head", "kuramoto_K", "q_lorentz", "k_lorentz",
-        "conv", "norm", "tssp",
+        "log_c", "tau_povm", "conv", "norm", "tssp", "gate_geo",
     )
 
     def __init__(self, model: torch.nn.Module, adamw_lr: float = 2e-4, muon_lr: float = 8e-4, weight_decay: float = 0.1):

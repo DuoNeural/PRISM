@@ -221,7 +221,7 @@ class RPPLM(nn.Module):
             DualTimescaleScanSubBlock(d_model, n_heads=n_heads, ffn_dim=ffn_dim) for _ in range(n_layers)
         ])
         self.norm_out = RMSNorm(d_model)
-        self.head = BornLogPOVMHead(d_model, d_emb, init_scale=1.0, eps=1e-3, chunk_size=128)
+        self.head = BornLogPOVMHead(d_model, d_emb, init_scale=12.0, eps=1e-6, chunk_size=128, mode="amplitude")
 
         cos, sin = build_rope_cache(max_seq_len, d_model // n_heads)
         self.register_buffer("rope_cos", cos, persistent=False)

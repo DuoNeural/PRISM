@@ -25,6 +25,7 @@ from prism.kernels.common import (
     apply_rope,
     projection_sandwiched_generic_fp32,
 )
+from prism.kernels.born_povm import BornLogPOVMHead
 
 
 def lorentz_origin_logmap(x: torch.Tensor, kappa: torch.Tensor) -> torch.Tensor:
@@ -160,13 +161,14 @@ class CliffordGenericMixer(nn.Module):
         self.norm_prod = RMSNorm(d_feat)
         self.out_proj = nn.Linear(d_feat, d_model, bias=False)
 
-        # Lightweight GENERIC refinement on output space
+        # Lightweight GENERIC refinement on output space + Post-GENERIC norm
         self.generic_dim = 64
         assert d_model % self.generic_dim == 0
         self.e_proj = nn.Linear(d_model, d_model, bias=False)
         self.s_proj = nn.Linear(d_model, d_model, bias=False)
         self.J_generic = nn.Parameter(torch.randn(self.generic_dim, self.generic_dim) * 0.02)
         self.gamma_raw = nn.Parameter(torch.tensor(-2.0))
+        self.post_gen_norm = RMSNorm(d_model)
 
     def forward(self, x: torch.Tensor):
         B, T, D = x.shape
@@ -175,7 +177,6 @@ class CliffordGenericMixer(nn.Module):
 
         a = a_raw.float().view(B, T, self.n_vec, 3)
         b = b_raw.float().view(B, T, self.n_vec, 3)
-        # Scale by 1/sqrt(3) before bilinear product
         a = a / math.sqrt(3.0)
         b = b / math.sqrt(3.0)
         dot = (a * b).sum(dim=-1)                        # [B, T, n_vec]
@@ -191,8 +192,8 @@ class CliffordGenericMixer(nn.Module):
         gE = self.e_proj(h).view(B, T, n_grp, self.generic_dim)
         gS = self.s_proj(h).view(B, T, n_grp, self.generic_dim)
         gamma = F.softplus(self.gamma_raw) + 1e-4
-        x_gen, g_metrics = projection_sandwiched_generic_fp32(x_g, gE, gS, self.J_generic, gamma, dt=0.15)
-        return x_gen.view(B, T, D), g_metrics
+        x_gen, g_metrics = projection_sandwiched_generic_fp32(x_g, gE, gS, self.J_generic, gamma, dt=0.08)
+        return self.post_gen_norm(x_gen.view(B, T, D)), g_metrics
 
 
 class LDGBlock(nn.Module):
@@ -212,11 +213,12 @@ class LDGBlock(nn.Module):
         self.q_lorentz_norm = RMSNorm(self.head_dim)
         self.k_lorentz_norm = RMSNorm(self.head_dim)
 
-        # Gate projections (head-isotropic alpha_t, beta_t) + readout gate
+        # Gate projections (head-isotropic alpha_t, beta_t) + geodesic gate modulation
         self.ab_proj = nn.Linear(d_model, 2 * n_heads, bias=True)
-        # Initialize bias so initial alpha ~ 0.90 (log_a_bias=+2.2), beta ~ 0.5
+        self.gate_geo = nn.Parameter(torch.zeros(2 * n_heads))
+        # Logarithmic multi-timescale head bias init: tau spanning ~[6, 180] tokens
         with torch.no_grad():
-            self.ab_proj.bias[:n_heads].fill_(2.2)
+            self.ab_proj.bias[:n_heads].copy_(torch.linspace(1.6, 5.2, n_heads))
             self.ab_proj.bias[n_heads:].fill_(-0.7)
 
         self.out_gate = nn.Linear(d_model, d_model, bias=False)
@@ -241,23 +243,26 @@ class LDGBlock(nn.Module):
         v = v.view(B, T, self.n_heads, self.head_dim)
 
         # Lorentz Origin Log-Map warping (bounded kappa in [0.05, 10.0]) + RoPE
+        # NOTE: q stays UN-NORMALIZED so hyperbolic radial factor shapes retrieval strength & log_c grads!
+        # Only k_hat is Euclidean unit-normalized for exact Householder stability.
         kappa = 0.05 + 9.95 * torch.sigmoid(self.log_c)
-        q = lorentz_origin_logmap(self.q_lorentz_norm(q), kappa)
+        q = lorentz_origin_logmap(self.q_lorentz_norm(q), kappa) / math.sqrt(self.head_dim)
         k = lorentz_origin_logmap(self.k_lorentz_norm(k), kappa)
 
         q = apply_rope(q, rope_cos, rope_sin)
         k = apply_rope(k, rope_cos, rope_sin)
 
-        # Strict Euclidean unit key normalization (Red Team Fix 1!)
-        q_norm = q.float() / torch.sqrt((q.float() ** 2).sum(dim=-1, keepdim=True) + 1e-6)
         k_hat = k.float() / torch.sqrt((k.float() ** 2).sum(dim=-1, keepdim=True) + 1e-6)
 
-        ab = self.ab_proj(h).float()
+        # Geodesic radius couples hyperbolic norm directly into retention/erasure gates
+        h_norm = torch.sqrt((h.float() ** 2).mean(dim=-1, keepdim=True) + 1e-6)
+        geo_rad = torch.asinh(torch.sqrt(kappa.float()) * h_norm) / torch.sqrt(kappa.float())
+        ab = self.ab_proj(h).float() + (geo_rad - 1.0) * self.gate_geo.float()
         a_logit, b_logit = ab.chunk(2, dim=-1)
         alpha = 0.01 + 0.989 * torch.sigmoid(a_logit)   # (0.01, 0.999) FP32
         beta = 1.5 * torch.sigmoid(b_logit)              # (0, 1.5) convex/bounded Householder
 
-        mem, mean_s_norm = chunked_wy_delta_scan(q_norm, k_hat, v, alpha, beta, chunk_size=self.chunk_size)
+        mem, mean_s_norm = chunked_wy_delta_scan(q, k_hat, v, alpha, beta, chunk_size=self.chunk_size)
         mem = self.out_norm(mem).reshape(B, T, D)
         attn_out = self.o_proj(F.silu(self.out_gate(h)) * mem)
         x = x + attn_out
@@ -286,6 +291,7 @@ class LDGLM(nn.Module):
         chunk_size: int = 64,
         max_seq_len: int = 1024,
         tssp_weight: float = 0.05,
+        use_povm_head: bool = False,
     ):
         super().__init__()
         self.vocab_size = vocab_size
@@ -293,6 +299,7 @@ class LDGLM(nn.Module):
         self.d_model = d_model
         self.chunk_size = chunk_size
         self.tssp_weight = tssp_weight
+        self.use_povm_head = use_povm_head
 
         self.embed = nn.Embedding(vocab_size, d_emb)
         nn.init.normal_(self.embed.weight, std=0.02)
@@ -302,7 +309,10 @@ class LDGLM(nn.Module):
             LDGBlock(d_model, n_heads=n_heads, chunk_size=chunk_size) for _ in range(n_layers)
         ])
         self.norm_out = RMSNorm(d_model)
-        self.head = FactorizedTiedHead(d_model, d_emb, chunk_size=256)
+        if use_povm_head:
+            self.head = BornLogPOVMHead(d_model, d_emb, init_scale=12.0, eps=1e-6, chunk_size=128, mode="amplitude")
+        else:
+            self.head = FactorizedTiedHead(d_model, d_emb, chunk_size=256)
 
         # Collapse-proof TSSP chunk predictor over mean-pooled hidden summaries
         self.tssp_pred = nn.Sequential(
@@ -362,4 +372,6 @@ class LDGLM(nn.Module):
         m["ce_loss"] = ce_loss.detach().item()
         m["tssp_loss"] = tssp_loss.detach().item()
         m["aux_loss"] = (self.tssp_weight * tssp_scale * tssp_loss).detach().item()
+        if self.use_povm_head:
+            m["povm_scale"] = self.head.scale.detach().item()
         return total, m

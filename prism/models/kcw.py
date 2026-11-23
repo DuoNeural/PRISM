@@ -86,16 +86,21 @@ class KCWBlock(nn.Module):
         omega_init = (0.8 * (PHI ** (-layer_idx / 4.0)) + 0.35 * torch.frac((layer_idx * n_heads * self.n_osc + idx) * INV_PHI))
         self.omega_base = nn.Parameter(omega_init.view(1, 1, n_heads, self.n_osc))
 
-        # Log-decay initialized spanning tau in [8, 256] (slow enough for T=512 DHP survival)
-        tau_grid = torch.exp(torch.linspace(math.log(8.0), math.log(256.0), self.n_osc)).repeat(n_heads)
+        # Log-decay initialized spanning tau in [8, 512] (full seq_len=512 DHP survival)
+        tau_grid = torch.exp(torch.linspace(math.log(8.0), math.log(512.0), self.n_osc)).repeat(n_heads)
         gamma_init = torch.log(torch.expm1(1.0 / tau_grid).clamp(min=1e-4))
         self.gamma_raw = nn.Parameter(gamma_init.view(1, 1, n_heads, self.n_osc))
 
         # Inter-head algebraic Kuramoto phase coupling K in R^{H x H}
         self.kuramoto_K = nn.Parameter(torch.zeros(n_heads, n_heads))
 
-        # Exact Bernoulli Landau radial parameters: alpha_landau starts lightly near critical point (~+0.2)
-        self.alpha_landau = nn.Parameter(torch.full((1, 1, n_heads, self.n_osc), 0.25))
+        # Exact Bernoulli Landau radial parameters: 50/50 bimodal init (-0.25 damped, +0.25 bistable)
+        half_m = self.n_osc // 2
+        alpha_init = torch.cat([
+            torch.full((1, 1, n_heads, half_m), -0.25),
+            torch.full((1, 1, n_heads, self.n_osc - half_m), 0.25),
+        ], dim=-1)
+        self.alpha_landau = nn.Parameter(alpha_init)
         self.beta_landau = nn.Parameter(torch.full((1, 1, n_heads, self.n_osc), 0.0))
 
         self.o_proj = nn.Linear(d_model, d_model, bias=False)
@@ -148,7 +153,7 @@ class KCWBlock(nn.Module):
         alpha_clamped = self.alpha_landau.clamp(min=-2.0, max=2.0)
         k_r, k_i = exact_bernoulli_double_well(k_r, k_i, alpha_clamped, beta_pos, dt=0.25)
 
-        wave_out = torch.cat([k_r, k_i], dim=-1).view(B, T, D).to(x.dtype)
+        wave_out = torch.cat([k_r, k_i], dim=-1).view(B, T, D).to(x.dtype) + 0.25 * u
         gate = F.silu(self.read_gate(h))
         x = x + self.o_proj(gate * wave_out)
 

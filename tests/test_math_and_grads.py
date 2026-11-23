@@ -134,26 +134,27 @@ def test_born_povm_head_grad_parity():
     dev = _get_device()
     torch.manual_seed(2)
     B, T, D, d_emb, V = 2, 16, 64, 32, 500
-    head = BornLogPOVMHead(D, d_emb=d_emb, init_scale=10.0, eps=1e-3, chunk_size=12).to(dev)
-    embed = torch.nn.Parameter(torch.randn(V, d_emb, device=dev) * 0.02)
-    h = torch.randn(B, T, D, device=dev, requires_grad=True)
-    y = torch.randint(0, V, (B, T), device=dev)
+    for mode, init_s, eps in [("log", 1.0, 1e-3), ("amplitude", 12.0, 1e-6)]:
+        head = BornLogPOVMHead(D, d_emb=d_emb, init_scale=init_s, eps=eps, chunk_size=12, mode=mode).to(dev)
+        embed = torch.nn.Parameter(torch.randn(V, d_emb, device=dev) * 0.02)
+        h = torch.randn(B, T, D, device=dev, requires_grad=True)
+        y = torch.randint(0, V, (B, T), device=dev)
 
-    loss_chunked = head.forward_loss(h, embed, y)
-    loss_chunked.backward()
-    g_c = [h.grad.clone(), embed.grad.clone(), head.tau_povm.grad.clone(), head.proj.weight.grad.clone()]
+        loss_chunked = head.forward_loss(h, embed, y)
+        loss_chunked.backward()
+        g_c = [h.grad.clone(), embed.grad.clone(), head.tau_povm.grad.clone(), head.proj.weight.grad.clone()]
 
-    h.grad = embed.grad = head.tau_povm.grad = head.proj.weight.grad = None
-    logits_ref = head.forward_logits(h, embed)
-    loss_ref = F.cross_entropy(logits_ref.reshape(-1, V), y.reshape(-1))
-    loss_ref.backward()
-    g_r = [h.grad.clone(), embed.grad.clone(), head.tau_povm.grad.clone(), head.proj.weight.grad.clone()]
+        h.grad = embed.grad = head.tau_povm.grad = head.proj.weight.grad = None
+        logits_ref = head.forward_logits(h, embed)
+        loss_ref = F.cross_entropy(logits_ref.reshape(-1, V), y.reshape(-1))
+        loss_ref.backward()
+        g_r = [h.grad.clone(), embed.grad.clone(), head.tau_povm.grad.clone(), head.proj.weight.grad.clone()]
 
-    loss_err = abs(loss_chunked.item() - loss_ref.item())
-    g_errs = [(a - b).abs().max().item() for a, b in zip(g_c, g_r)]
-    print(f"[Born-Log POVM] loss err = {loss_err:.2e} | grad max errs = {[f'{e:.2e}' for e in g_errs]}")
-    assert loss_err < 1e-5
-    assert max(g_errs) < 1e-4
+        loss_err = abs(loss_chunked.item() - loss_ref.item())
+        g_errs = [(a - b).abs().max().item() for a, b in zip(g_c, g_r)]
+        print(f"[Born POVM ({mode})] loss err = {loss_err:.2e} | grad max errs = {[f'{e:.2e}' for e in g_errs]}")
+        assert loss_err < 1e-5
+        assert max(g_errs) < 1e-4
 
 
 def test_rpp_reversible_drift_and_grad():
@@ -205,7 +206,8 @@ def test_param_parity_and_step0():
 
     specs = {
         "gpt": GPTBaselineLM(),
-        "ldg": LDGLM(),
+        "ldg": LDGLM(use_povm_head=False),
+        "ldg_povm": LDGLM(use_povm_head=True),
         "kcw": KCWLM(),
         "rpp": RPPLM(),
     }

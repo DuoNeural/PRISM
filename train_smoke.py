@@ -45,7 +45,9 @@ def build_model(arch: str, vocab: int, seq_len: int):
     if arch == "gpt":
         return GPTBaselineLM(vocab_size=vocab, max_seq_len=max(seq_len, 1024))
     if arch == "ldg":
-        return LDGLM(vocab_size=vocab, max_seq_len=max(seq_len, 1024))
+        return LDGLM(vocab_size=vocab, max_seq_len=max(seq_len, 1024), use_povm_head=False)
+    if arch == "ldg_povm":
+        return LDGLM(vocab_size=vocab, max_seq_len=max(seq_len, 1024), use_povm_head=True)
     if arch == "kcw":
         return KCWLM(vocab_size=vocab, max_seq_len=max(seq_len, 1024))
     if arch == "rpp":
@@ -81,7 +83,7 @@ def evaluate(model, val_dl, device, max_batches: int = 40):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--arch", required=True, choices=["gpt", "ldg", "kcw", "rpp"])
+    p.add_argument("--arch", required=True, choices=["gpt", "ldg", "ldg_povm", "kcw", "rpp"])
     p.add_argument("--data", default="/workspace/rmsn_data/tokens_wiki103_full.pt")
     p.add_argument("--out", required=True)
     p.add_argument("--vocab", type=int, default=49152)
@@ -161,7 +163,7 @@ def main():
 
         opt.zero_grad(set_to_none=True)
         with torch.amp.autocast("cuda", dtype=torch.bfloat16, enabled=device.type == "cuda"):
-            if args.arch == "ldg":
+            if args.arch in ("ldg", "ldg_povm"):
                 tssp_s = min(1.0, max(0.0, (step - 150) / 150.0))
                 loss, m = model(bx, by, tssp_scale=tssp_s)
             else:

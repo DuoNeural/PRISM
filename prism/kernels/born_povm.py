@@ -23,7 +23,9 @@ class _ChunkedBornLogPOVMFn(torch.autograd.Function):
         scale: torch.Tensor,      # scalar positive tensor
         eps: float,
         chunk_size: int,
+        mode: str = "amplitude",
     ):
+        ctx.mode = mode
         assert h_raw.ndim == 2 and E_raw.ndim == 2
         N, D = h_raw.shape
         V, D_e = E_raw.shape
@@ -64,8 +66,12 @@ class _ChunkedBornLogPOVMFn(torch.autograd.Function):
             im = psi_c @ E_conj_swap_T
 
             mod_sq = re * re + im * im
-            log_feat = torch.log(mod_sq + eps) - log_denom
-            logits = sc * log_feat
+            if ctx.mode == "amplitude":
+                # Pure quantum probability amplitude: sqrt(|<psi, E_v>|^2 + eps), C^infty smooth
+                feat = torch.sqrt(mod_sq + eps)
+            else:
+                feat = torch.log(mod_sq + eps) - log_denom
+            logits = sc * feat
 
             # Stable FP32 cross-entropy + softmax probs
             tgt_safe = torch.where(vm_c, tgt_c, torch.zeros_like(tgt_c))
@@ -85,9 +91,12 @@ class _ChunkedBornLogPOVMFn(torch.autograd.Function):
             )
             d_logits = d_logits * (vm_c.float().unsqueeze(1) / n_valid)
 
-            d_scale = d_scale + (d_logits * log_feat).sum()
+            d_scale = d_scale + (d_logits * feat).sum()
 
-            d_mod_sq = d_logits * (sc / (mod_sq + eps))
+            if ctx.mode == "amplitude":
+                d_mod_sq = d_logits * (0.5 * sc / feat)
+            else:
+                d_mod_sq = d_logits * (sc / (mod_sq + eps))
             d_re = (2.0 * d_mod_sq) * re
             d_im = (2.0 * d_mod_sq) * im
 
@@ -115,32 +124,33 @@ class _ChunkedBornLogPOVMFn(torch.autograd.Function):
     def backward(ctx, grad_out: torch.Tensor):
         d_h_raw, d_E_raw, d_scale = ctx.saved_tensors
         g = grad_out.to(d_h_raw.dtype)
-        return d_h_raw * g, d_E_raw * grad_out.to(d_E_raw.dtype), None, d_scale * grad_out.to(d_scale.dtype), None, None
+        return d_h_raw * g, d_E_raw * grad_out.to(d_E_raw.dtype), None, d_scale * grad_out.to(d_scale.dtype), None, None, None
 
 
 class BornLogPOVMHead(nn.Module):
     """
-    Complex Born-Log POVM Cross-Entropy Head tied to a real [V, d_emb] embedding table.
+    Complex Born POVM Cross-Entropy Head tied to a real [V, d_emb] embedding table.
+    Supports mode="amplitude" (scale * sqrt(|<psi,E>|^2 + eps), breaks Welch floor cleanly)
+    or mode="log" (scale * log(|<psi,E>|^2 + eps)).
     """
-    def __init__(self, d_model: int, d_emb: int = 256, init_scale: float = 1.0, eps: float = 1e-3, chunk_size: int = 128):
+    def __init__(self, d_model: int, d_emb: int = 256, init_scale: float = 12.0, eps: float = 1e-6, chunk_size: int = 128, mode: str = "amplitude"):
         super().__init__()
         assert d_emb % 2 == 0
         self.proj = nn.Linear(d_model, d_emb, bias=False)
-        # scale = 0.2 + softplus(tau_raw) initialized at natural Born point scale=1.0
         init_sp = math.log(math.expm1(max(init_scale - 0.2, 0.1)))
         self.tau_povm = nn.Parameter(torch.tensor(init_sp, dtype=torch.float32))
         self.eps = eps
         self.chunk_size = chunk_size
+        self.mode = mode
 
     @property
     def scale(self) -> torch.Tensor:
         return 0.2 + F.softplus(self.tau_povm)
 
     def forward_loss(self, hidden: torch.Tensor, embed_weight: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
-        # hidden: [B, T, D], targets: [B, T]
         h_raw = self.proj(hidden).reshape(-1, embed_weight.shape[1])
         tgt = targets.reshape(-1)
-        return _ChunkedBornLogPOVMFn.apply(h_raw, embed_weight, tgt, self.scale, self.eps, self.chunk_size)
+        return _ChunkedBornLogPOVMFn.apply(h_raw, embed_weight, tgt, self.scale, self.eps, self.chunk_size, self.mode)
 
     def forward_logits(self, hidden: torch.Tensor, embed_weight: torch.Tensor) -> torch.Tensor:
         """Unchunked logits helper for generation/probes on short sequences."""
@@ -154,4 +164,6 @@ class BornLogPOVMHead(nn.Module):
         re = psi_r @ E_r.t() + psi_i @ E_i.t()
         im = psi_i @ E_r.t() - psi_r @ E_i.t()
         mod_sq = re * re + im * im
+        if self.mode == "amplitude":
+            return self.scale.float() * torch.sqrt(mod_sq + self.eps)
         return self.scale.float() * (torch.log(mod_sq + self.eps) - math.log(1.0 + self.eps))
