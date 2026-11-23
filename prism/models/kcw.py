@@ -65,7 +65,7 @@ def exact_bernoulli_double_well(
 
 
 class KCWBlock(nn.Module):
-    def __init__(self, d_model: int, n_heads: int = 16, ffn_dim: int = 1280, layer_idx: int = 0):
+    def __init__(self, d_model: int, n_heads: int = 8, ffn_dim: int = 1280, layer_idx: int = 0):
         super().__init__()
         self.d_model = d_model
         self.n_heads = n_heads
@@ -185,7 +185,7 @@ class KCWLM(nn.Module):
         d_emb: int = 256,
         d_model: int = 512,
         n_layers: int = 10,
-        n_heads: int = 16,
+        n_heads: int = 8,
         ffn_dim: int = 1280,
         max_seq_len: int = 1024,
     ):

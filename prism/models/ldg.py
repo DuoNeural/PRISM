@@ -161,11 +161,11 @@ class CliffordGenericMixer(nn.Module):
         self.norm_prod = RMSNorm(d_feat)
         self.out_proj = nn.Linear(d_feat, d_model, bias=False)
 
-        # Compact bottleneck GENERIC projections (512 -> 64 -> 512) saving ~4.6M params
+        # Full-rank GENERIC refinement on output space + Post-GENERIC norm (v0.2 winner: 146.48 PPL)
         self.generic_dim = 64
         assert d_model % self.generic_dim == 0
-        self.e_proj = nn.Sequential(nn.Linear(d_model, 64, bias=False), nn.Linear(64, d_model, bias=False))
-        self.s_proj = nn.Sequential(nn.Linear(d_model, 64, bias=False), nn.Linear(64, d_model, bias=False))
+        self.e_proj = nn.Linear(d_model, d_model, bias=False)
+        self.s_proj = nn.Linear(d_model, d_model, bias=False)
         self.J_generic = nn.Parameter(torch.randn(self.generic_dim, self.generic_dim) * 0.02)
         self.gamma_raw = nn.Parameter(torch.tensor(-2.0))
         self.post_gen_norm = RMSNorm(d_model)
@@ -197,7 +197,7 @@ class CliffordGenericMixer(nn.Module):
 
 
 class LDGBlock(nn.Module):
-    def __init__(self, d_model: int, n_heads: int = 16, chunk_size: int = 64, n_vec: int = 240):
+    def __init__(self, d_model: int, n_heads: int = 8, chunk_size: int = 64, n_vec: int = 192):
         super().__init__()
         self.d_model = d_model
         self.n_heads = n_heads
@@ -287,7 +287,7 @@ class LDGLM(nn.Module):
         d_emb: int = 256,
         d_model: int = 512,
         n_layers: int = 10,
-        n_heads: int = 16,
+        n_heads: int = 8,
         chunk_size: int = 64,
         max_seq_len: int = 1024,
         tssp_weight: float = 0.05,
@@ -306,7 +306,7 @@ class LDGLM(nn.Module):
         self.emb_up = nn.Linear(d_emb, d_model, bias=False)
 
         self.blocks = nn.ModuleList([
-            LDGBlock(d_model, n_heads=n_heads, chunk_size=chunk_size, n_vec=240) for _ in range(n_layers)
+            LDGBlock(d_model, n_heads=n_heads, chunk_size=chunk_size, n_vec=192) for _ in range(n_layers)
         ])
         self.norm_out = RMSNorm(d_model)
         if use_povm_head:

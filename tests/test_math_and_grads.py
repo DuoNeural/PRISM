@@ -40,6 +40,7 @@ def test_causality_all_models():
         "ldg": LDGLM(n_layers=2, max_seq_len=T).to(dev),
         "kcw": KCWLM(n_layers=2, max_seq_len=T).to(dev),
         "rpp": RPPLM(n_layers=2, max_seq_len=T).to(dev),
+        "rpp_delta": RPPLM(n_layers=2, max_seq_len=T, use_hybrid_delta=True).to(dev),
         "rmsn": RMSNOmega45LM(n_layers=2, d_model=128, num_slots=16).to(dev),
     }
     for name, m in models.items():
@@ -211,7 +212,8 @@ def test_param_parity_and_step0():
         "ldg": LDGLM(use_povm_head=False),
         "ldg_povm": LDGLM(use_povm_head=True),
         "kcw": KCWLM(),
-        "rpp": RPPLM(),
+        "rpp": RPPLM(use_hybrid_delta=False),
+        "rpp_delta": RPPLM(use_hybrid_delta=True),
         "rmsn": RMSNOmega45LM(),
     }
     print(f"\n{'Arch':<6} {'TotalM':>8} {'EmbM':>8} {'BackM':>8} {'Step0_CE':>10} {'Target_lnV':>11}")

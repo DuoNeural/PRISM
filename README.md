@@ -43,7 +43,8 @@ All models share an identical **factorized tied `49152 → 256` embedding bottle
 | `ldg_povm` | **Lorentz-Delta GENERIC + Quantum POVM (`LDG-POVM`)** | Pairs the full `LDG v0.2` Lorentz-Delta GENERIC TSSP backbone with the chunked FP32 complex `BornAmplitudePOVMHead`, isolating whether quantum Born measurement readout complements GENERIC recurrent state processing. |
 | `kcw` | **Kuramoto-Clifford WaveNet (`KCW`)** | **Wave scan:** Coalesced Triton FP32 complex associative scan (`tl.associative_scan` + Wirtinger adjoint backward) with Hurwitz quasicrystal frequency spacing (`INV_PHI`), Cayley phases, ZOH/OU variance-balanced drive, and causal `conv4` + RoPE. **Synchronization:** Post-scan singularity-free algebraic Kuramoto phase coupling across heads (`sin(theta_j - theta_h) = Im(z_hat_j * conj(z_hat_h))`, zero `atan2`!) bounded to `\|eta K\|_inf <= 0.6` so oscillators stay in the expressive sync band rather than collapsing (`R -> 1`) or uncoupling (`R -> 0`). **Bifurcation:** Exact closed-form Bernoulli ODE solution for radial Landau flow `dr/dt = alpha*r - beta*r^3` (50/50 damped/bistable init in `v0.2`), followed by a singularity-free Taylor-sinc `Cl_{3,0}` rotor + SwiGLU. **Metrics:** Kuramoto order parameter `R_order`, `frac_bistable`, `amp_mean`, `exp_decay`. |
 | `rpp` | **RevPort-POVM Hybrid (`RPP`)** | **Backbone:** 10-layer bit-exact FP32 reversible Port-Hamiltonian conjugate streams `(q, p in R^512)` (BF16 sub-block compute cast to FP32 additions; backward reconstruction drift `< 1e-4`), slashing peak training VRAM down to **~1.37 GB**. **Sub-blocks:** `F(p)` runs exact causal sliding-window RoPE attention (`W=64`, diagonal-safe overlapping SDPA); `G(q)` runs a Dual-Timescale Unital OU Triton scan (50% fast poles `tau in [1, 32]`, 50% slow poles `tau in [64, 1024]`, exact OU drive gain `sqrt(1 - a^2)`). **Readout:** Chunked FP32 complex `BornAmplitudePOVMHead`. **Metrics:** `stream_q_rms`, `stream_p_rms`, `povm_scale`. |
-| `rmsn` | *Planned v0.2 Addition* | Matched `Omega=4/5` Resonant Metriplectic Sheaf Network (`D=512`) baseline for direct head-to-head comparison against DuoNeural's proven `sub-50 PPL` architecture. |
+| `rpp_delta` | **RevPort-Delta-POVM (`RPP-Delta`, v0.4)** | Alternates `G` blocks between Dual-Timescale Unital OU Triton Scans (odd layers) and Chunk-64 WY Gated Delta-Rule + Lorentz Log-Map associative memory (even layers) inside the bit-exact FP32 reversible `(q, p)` carrier + `BornAmplitudePOVMHead` (`46.19M` params). |
+| `rmsn` | **RMSN (`Omega = 4/5`)** | Matched `Omega = D / (M_w * L) = 640 / (80 * 10) = 0.80 = 4/5` Resonant Metriplectic Sheaf Network (`49.28M` params) wrapping hardened `rmsn_core.py` (`CliffordStalkBundle`, `MetriplecticParallelScanFn`, `FractionalCaputoBank`, `CausalTrophicGlobalWorkspace`) inside PRISM's shared tied `49152 <-> 256` head. **Metrics:** `lyap`, `mean_energy`, `ws_entropy`, `omega`. |
 
 ---
 
@@ -74,8 +75,18 @@ All models share an identical **factorized tied `49152 → 256` embedding bottle
 | `rmsn` (`Ω=4/5`) | `49.28M` (`36.69M`) | `19,599 MB` | `~11,500` | `640.57` | `208.53` | **`5.2210`** | **`185.13`** | `lyap: -0.0699 -> -0.00123` (TRUE SILENT); `ws_entropy: 4.382 -> 4.249` (needs 10k-50k+ for full soliton condensation) |
 | `ldg_povm` v0.2 | `45.69M` (`33.11M`) | `9,721 MB` | `~17,100` | `2110.26` | `330.61` | **`5.6046`** | **`271.67`** | Unscaled residuals spiked early `gn` -> fixed with `0.02/sqrt(2L)` + `25x` `tau_povm` LR in `v0.3` |
 
-### v0.3 (Running Live on `p19285`)
-- `ldg v0.3` (`H=16, dh=32`, compact bottleneck GENERIC, `n_vec=240`), `kcw v0.3` (`H=16`, `+0.25` bistable), `rpp v0.3` (`25x` `tau_povm` LR), `ldg_povm v0.3` (`0.02/sqrt(2L)` residual scale + `25x` `tau_povm` LR).
+### v0.3 Leaderboard (`1,500` steps, `12.29M` tokens, `0` NaNs — Quantum POVM Beats Full-Attention GPT)
+| Arch | Total (Backbone) | Peak VRAM | Speed (tok/s) | Final `val_ce` | Final `val_ppl` | Key Finding |
+|---|---|---|---|---|---|---|
+| **`rpp` v0.3** | `46.10M` (`33.52M`) | **`1,370 MB`** | `~26,800` | **`4.8053`** | **`122.15`** | **Beats matched Causal GPT (`124.04`) by `-1.89 PPL`** with no global attention & `2.1x` less VRAM (`povm_scale: 12.0 -> 16.03`) |
+| `gpt` (Baseline) | `45.95M` (`33.37M`) | `2,884 MB` | `~64,000` | `4.8206` | `124.04` | Full $O(T^2)$ causal RoPE-SwiGLU reference |
+| `ldg` v0.2 (`H=8`) | `45.69M` (`33.11M`) | `9,525 MB` | `~20,800` | `4.9869` | `146.48` | `v0.3` ablation (`H=16, dh=32`, bottleneck GENERIC) scored `151.71`, confirming `dh=64` matrix capacity + full GENERIC (`ds_dt ~ 6`) |
+| `kcw` v0.1 (`H=8`) | `45.65M` (`33.07M`) | `6,583 MB` | `~36,700` | `4.9896` | `146.87` | `v0.3` ablation (`H=16`) scored `152.29` (`R_order: 0.320 -> 0.227`), confirming `H=8` deeper oscillator banks |
+| `rmsn` (`Ω=4/5`) | `49.28M` (`36.69M`) | `19,599 MB` | `~11,500` | `5.2210` | `185.13` | `lyap: -0.0699 -> -0.00123` (TRUE SILENT); `ws_entropy: 4.382 -> 4.249` (needs 10k-50k+ for full soliton condensation) |
+| `ldg_povm` v0.3 | `45.28M` (`32.70M`) | `11,099 MB` | `~16,400` | `5.4633` | `235.87` | Improved `-35.8 PPL` vs `v0.2` (`271.67`), `povm_scale -> 15.5`, though unattenuated TSSP+GENERIC gradients (`gn=22` early) still hinder unit-sphere POVM head |
+
+### v0.4 (Running Live on `p19285`)
+- **`rpp_delta`**: Combines our **122.15 PPL** `rpp` reversible Born-Amplitude POVM champion with alternating Chunk-64 WY Gated DeltaNet (`dh=64`) associative memory (`46.19M` params).
 
 ---
 

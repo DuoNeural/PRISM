@@ -20,6 +20,7 @@ import torch.nn.functional as F
 from prism.kernels.common import RMSNorm, build_rope_cache, apply_rope
 from prism.kernels.complex_scan import complex_linear_scan
 from prism.kernels.born_povm import BornLogPOVMHead
+from prism.models.ldg import chunked_wy_delta_scan, lorentz_origin_logmap
 
 
 def sliding_window_causal_sdpa(q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, window: int = 64) -> torch.Tensor:
@@ -149,6 +150,63 @@ class DualTimescaleScanSubBlock(nn.Module):
         return delta + self.w2(F.silu(u1) * g1)
 
 
+class DeltaSubBlock(nn.Module):
+    """G_alt(q): Chunk-64 WY Gated Delta-Rule + Lorentz Log-Map + SwiGLU for Reversible Port Streams."""
+    def __init__(self, d_model: int, n_heads: int = 8, chunk_size: int = 64, ffn_dim: int = 416):
+        super().__init__()
+        self.d_model = d_model
+        self.n_heads = n_heads
+        self.head_dim = d_model // n_heads
+        self.chunk_size = chunk_size
+
+        self.norm1 = RMSNorm(d_model)
+        self.qkv_proj = nn.Linear(d_model, 3 * d_model, bias=False)
+        self.conv = nn.Conv1d(3 * d_model, 3 * d_model, kernel_size=4, padding=3, groups=3 * d_model, bias=False)
+        self.log_c = nn.Parameter(torch.tensor(-0.5))
+        self.q_lorentz_norm = RMSNorm(self.head_dim)
+        self.k_lorentz_norm = RMSNorm(self.head_dim)
+        self.ab_proj = nn.Linear(d_model, 2 * n_heads, bias=True)
+        with torch.no_grad():
+            self.ab_proj.bias[:n_heads].copy_(torch.linspace(1.6, 5.2, n_heads))
+            self.ab_proj.bias[n_heads:].fill_(-0.7)
+
+        self.out_gate = nn.Linear(d_model, d_model, bias=False)
+        self.out_norm = RMSNorm(self.head_dim)
+        self.o_proj = nn.Linear(d_model, d_model, bias=False)
+
+        self.norm2 = RMSNorm(d_model)
+        self.w13 = nn.Linear(d_model, 2 * ffn_dim, bias=False)
+        self.w2 = nn.Linear(ffn_dim, d_model, bias=False)
+
+    def forward(self, q_in: torch.Tensor, rope_cos: torch.Tensor = None, rope_sin: torch.Tensor = None) -> torch.Tensor:
+        B, T, D = q_in.shape
+        h = self.norm1(q_in)
+        qkv = F.silu(self.conv(self.qkv_proj(h).transpose(1, 2))[..., :T].transpose(1, 2))
+        q, k, v = qkv.chunk(3, dim=-1)
+        q = q.view(B, T, self.n_heads, self.head_dim)
+        k = k.view(B, T, self.n_heads, self.head_dim)
+        v = v.view(B, T, self.n_heads, self.head_dim)
+
+        kappa = 0.05 + 9.95 * torch.sigmoid(self.log_c)
+        q = lorentz_origin_logmap(self.q_lorentz_norm(q), kappa) / math.sqrt(self.head_dim)
+        k = lorentz_origin_logmap(self.k_lorentz_norm(k), kappa)
+        if rope_cos is not None:
+            q = apply_rope(q, rope_cos, rope_sin)
+            k = apply_rope(k, rope_cos, rope_sin)
+        k_hat = k.float() / torch.sqrt((k.float() ** 2).sum(dim=-1, keepdim=True) + 1e-6)
+
+        a_logit, b_logit = self.ab_proj(h).float().chunk(2, dim=-1)
+        alpha = 0.01 + 0.989 * torch.sigmoid(a_logit)
+        beta = 1.5 * torch.sigmoid(b_logit)
+        mem, _ = chunked_wy_delta_scan(q, k_hat, v, alpha, beta, chunk_size=self.chunk_size)
+        mem = self.out_norm(mem).reshape(B, T, D)
+        delta = self.o_proj(F.silu(self.out_gate(h)) * mem)
+
+        h2 = self.norm2(q_in + delta)
+        u1, g1 = self.w13(h2).chunk(2, dim=-1)
+        return delta + self.w2(F.silu(u1) * g1)
+
+
 class _ReversiblePortBlockFn(torch.autograd.Function):
     @staticmethod
     def forward(ctx, q_in, p_in, f_blk, g_blk, rope_cos, rope_sin, *params):
@@ -159,7 +217,7 @@ class _ReversiblePortBlockFn(torch.autograd.Function):
                 f_out = f_blk(p_in, rope_cos, rope_sin).float()
             q_out = q_in.float() + f_out
             with torch.amp.autocast("cuda", dtype=torch.bfloat16, enabled=q_in.is_cuda):
-                g_out = g_blk(q_out).float()
+                g_out = (g_blk(q_out, rope_cos, rope_sin) if isinstance(g_blk, DeltaSubBlock) else g_blk(q_out)).float()
             p_out = p_in.float() + g_out
 
         ctx.save_for_backward(q_out.detach(), p_out.detach(), rope_cos, rope_sin)
@@ -173,7 +231,7 @@ class _ReversiblePortBlockFn(torch.autograd.Function):
         with torch.enable_grad():
             q_tmp = q_out.detach().requires_grad_(True)
             with torch.amp.autocast("cuda", dtype=torch.bfloat16, enabled=q_out.is_cuda):
-                g_out = g_blk(q_tmp).float()
+                g_out = (g_blk(q_tmp, rope_cos, rope_sin) if isinstance(g_blk, DeltaSubBlock) else g_blk(q_tmp)).float()
             p_in = (p_out.detach() - g_out.detach())
 
             g_params = list(g_blk.parameters())
@@ -203,11 +261,13 @@ class RPPLM(nn.Module):
         window: int = 64,
         ffn_dim: int = 480,
         max_seq_len: int = 1024,
+        use_hybrid_delta: bool = False,
     ):
         super().__init__()
         self.vocab_size = vocab_size
         self.d_emb = d_emb
         self.d_model = d_model
+        self.use_hybrid_delta = use_hybrid_delta
 
         self.embed = nn.Embedding(vocab_size, d_emb)
         nn.init.normal_(self.embed.weight, std=0.02)
@@ -218,7 +278,10 @@ class RPPLM(nn.Module):
             WindowAttnSubBlock(d_model, n_heads=n_heads, window=window, ffn_dim=ffn_dim) for _ in range(n_layers)
         ])
         self.g_blocks = nn.ModuleList([
-            DualTimescaleScanSubBlock(d_model, n_heads=n_heads, ffn_dim=ffn_dim) for _ in range(n_layers)
+            DeltaSubBlock(d_model, n_heads=n_heads, chunk_size=window, ffn_dim=320)
+            if (use_hybrid_delta and i % 2 == 0)
+            else DualTimescaleScanSubBlock(d_model, n_heads=n_heads, ffn_dim=ffn_dim)
+            for i in range(n_layers)
         ])
         self.norm_out = RMSNorm(d_model)
         self.head = BornLogPOVMHead(d_model, d_emb, init_scale=12.0, eps=1e-6, chunk_size=128, mode="amplitude")
