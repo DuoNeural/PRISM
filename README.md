@@ -87,16 +87,17 @@ All models share an identical **factorized tied `49152 → 256` embedding bottle
 
 ### v0.4 Hybrid Check (`rpp_delta`, `1,500` steps) & Extended 5k Showdown (`40.96M` tokens)
 - **`rpp_delta` (`47.56M`, `1,534 MB` VRAM, `~19.5k tok/s`)**: `val_ce = 4.8390`, **`val_ppl = 126.34`** (`0` NaNs, `povm_scale -> 16.005`). Clean ablation: substituting half of `rpp`'s Dual-Timescale OU scans with WY Gated DeltaNet (`H=8`) slowed throughput and cost `+4.19 PPL` vs pure `rpp v0.3` (`122.15 PPL`), proving the **Dual-Timescale OU Scan + W=64 Attention + Born-Amplitude POVM** synergy.
-### 5,000-Step (`40.96M` tokens) Championship Showdown (`p19285`, Completed)
+### 5,000-Step (`40.96M` tokens) Championship Showdown (`p19285`, Completed + Full-Val `774`-batch Verified)
 | Rank | Arch | Total (Backbone) | Peak VRAM | Speed (tok/s) | 40-batch `val_ce` / `val_ppl` | **Full 774-batch `val_ce` / `val_ppl`** | Key Finding |
 |---|---|---|---|---|---|---|---|
-| 1 | `gpt` | `45.95M` (`33.37M`) | `2,884 MB` | `~64,400` | **`3.9637` / `52.65`** | **`3.9266` / `50.73`** | $O(T^2)$ exact causal attention overtakes between steps 500–1,000 |
-| 2 | **`rpp`** | `46.10M` (`33.52M`) | **`1,370 MB`** | `~26,900` | **`4.0699` / `58.55`** | **`4.0284` / `56.17`** | **2.1× less VRAM than GPT, 14.3× less than RMSN**; leads at 500 steps (and 1.5k schedule `122.15 < 124.04`); `povm_scale: 12.0 -> 25.41` |
-| 3 | **`ldg`** | `45.69M` (`33.11M`) | `9,525 MB` | `~20,700` | **`4.2524` / `70.27`** | *Pending `eval_probe`* | Pure linear $O(T)$ (`0` attention); `kappa: 3.8065 -> 4.1623`, `{S,E} <= 9e-5`, `ds_dt -> 58.84`, `tssp -> 0.249` |
-| 4 | **`kcw`** | `45.65M` (`33.07M`) | `6,583 MB` | `~38,000` | **`4.3669` / `78.80`** | *Pending `eval_probe`* | Non-attention complex harmonic + Kuramoto phase lock held `R_order = 0.3223` (`0` NaNs across 40.96M tokens) |
-| 5 | **`rmsn`** | `49.28M` (`36.69M`) | `19,599 MB` | `~11,500` | **`4.5935` / `98.84`** | *Pending `eval_probe`* | `lyap` locked TRUE SILENT `-0.00104`, `ws_entropy: 4.382 -> 1.757` (soliton condensation confirmed!) |
+| 1 | `gpt` | `45.95M` (`33.37M`) | `2,884 MB` | `~64,400` | `3.9637` / `52.65` | **`3.9266` / `50.73`** | $O(T^2)$ exact causal attention overtakes after step 500–1,000 |
+| 2 | **`rpp`** (`W=64` + POVM) | `46.10M` (`33.52M`) | **`1,370 MB`** | `~26,900` | `4.0699` / `58.55` | **`4.0284` / `56.17`** | **Beats linear-head `rpp_lin` by `-1.04 PPL` on full val**; `2.1×` less VRAM than GPT, leads early (`122.15 < 124.04` at 1.5k); `povm_scale -> 25.41` |
+| 3 | `rpp_lin` (`W=64` + Linear) | `46.10M` (`33.52M`) | **`1,174 MB`** | `~36,000` | `4.0835` / `59.35` | **`4.0468` / `57.21`** | Controlled head ablation: linear softmax starts faster (`210.96` vs `232.52` at 500) before Born POVM overtakes at step ~2,000–2,500 |
+| 4 | **`ldg`** | `45.69M` (`33.11M`) | `9,525 MB` | `~20,700` | `4.2524` / `70.27` | **`4.2175` / `67.87`** | Pure linear $O(T)$ (`0` attention); `kappa: 3.8065 -> 4.1623`, `{S,E} <= 9e-5`, `ds_dt -> 58.84`, `tssp -> 0.249` |
+| 5 | **`kcw`** | `45.65M` (`33.07M`) | `6,583 MB` | `~38,000` | `4.3669` / `78.80` | **`4.3288` / `75.86`** | Non-attention complex harmonic + Kuramoto phase lock held `R_order = 0.3223` (`0` NaNs across 40.96M tokens) |
+| 6 | **`rmsn`** (`Ω=4/5`) | `49.28M` (`36.69M`) | `19,599 MB` | `~11,500` | `4.5935` / `98.84` | **`4.5618` / `95.75`** | `lyap` locked TRUE SILENT `-0.00104`, `ws_entropy: 4.382 -> 1.757` (soliton condensation confirmed!) |
 
-- **Now Running (`p19285`):** `rpp_lin` 5k head ablation (`rpp` reversible Port-Hamiltonian backbone + standard linear `FactorizedTiedHead` vs `BornAmplitudePOVMHead`, `46.10M` exact match), after which `eval_probe.py` will score all 6 checkpoints across all 774 held-out batches (`6.34M` tokens).
+- **Now Running (`p19285`):** `rpp` `W=128` zero-extra-parameter window ablation (`--arch rpp --window 128 --steps 5000`) testing how far doubling the causal local receptive field (`W=64 -> W=128`) closes the `5.44 PPL` gap to full attention while retaining `~1.4 GB` VRAM and Born-Amplitude POVM readout.
 
 ---
 

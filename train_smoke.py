@@ -42,7 +42,7 @@ class ChunkDataset(Dataset):
         return chunk[:-1].long(), chunk[1:].long()
 
 
-def build_model(arch: str, vocab: int, seq_len: int):
+def build_model(arch: str, vocab: int, seq_len: int, window: int = 64):
     if arch == "gpt":
         return GPTBaselineLM(vocab_size=vocab, max_seq_len=max(seq_len, 1024))
     if arch == "ldg":
@@ -52,11 +52,11 @@ def build_model(arch: str, vocab: int, seq_len: int):
     if arch == "kcw":
         return KCWLM(vocab_size=vocab, max_seq_len=max(seq_len, 1024))
     if arch == "rpp":
-        return RPPLM(vocab_size=vocab, max_seq_len=max(seq_len, 1024), use_hybrid_delta=False, use_povm_head=True)
+        return RPPLM(vocab_size=vocab, max_seq_len=max(seq_len, 1024), window=window, use_hybrid_delta=False, use_povm_head=True)
     if arch == "rpp_lin":
-        return RPPLM(vocab_size=vocab, max_seq_len=max(seq_len, 1024), use_hybrid_delta=False, use_povm_head=False)
+        return RPPLM(vocab_size=vocab, max_seq_len=max(seq_len, 1024), window=window, use_hybrid_delta=False, use_povm_head=False)
     if arch == "rpp_delta":
-        return RPPLM(vocab_size=vocab, max_seq_len=max(seq_len, 1024), use_hybrid_delta=True, use_povm_head=True)
+        return RPPLM(vocab_size=vocab, max_seq_len=max(seq_len, 1024), window=window, use_hybrid_delta=True, use_povm_head=True)
     if arch == "rmsn":
         return RMSNOmega45LM(vocab_size=vocab)
     raise ValueError(f"Unknown arch: {arch}")
@@ -95,6 +95,7 @@ def main():
     p.add_argument("--out", required=True)
     p.add_argument("--vocab", type=int, default=49152)
     p.add_argument("--seq-len", type=int, default=512)
+    p.add_argument("--window", type=int, default=64)
     p.add_argument("--batch", type=int, default=16)
     p.add_argument("--steps", type=int, default=2500)
     p.add_argument("--warmup", type=int, default=150)
@@ -134,7 +135,7 @@ def main():
     val_dl = DataLoader(val_ds, batch_size=args.batch, shuffle=False, drop_last=True, num_workers=1, pin_memory=True)
     train_iter = iter(train_dl)
 
-    model = build_model(args.arch, args.vocab, args.seq_len).to(device)
+    model = build_model(args.arch, args.vocab, args.seq_len, window=args.window).to(device)
     tot_p = sum(p.numel() for p in model.parameters())
     emb_p = model.embed.weight.numel()
     opt = HybridMuonAdamW(model, adamw_lr=args.adamw_lr, muon_lr=args.muon_lr)
