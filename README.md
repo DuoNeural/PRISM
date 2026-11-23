@@ -99,7 +99,12 @@ All models share an identical **factorized tied `49152 → 256` embedding bottle
 | 7 | **`kcw`** | `45.65M` (`33.07M`) | `6,583 MB` | `~38,000` | `4.3669` / `78.80` | **`4.3288` / `75.86`** | Non-attention complex harmonic + Kuramoto phase lock held `R_order = 0.3223` (`0` NaNs across 40.96M tokens) |
 | 8 | **`rmsn`** (`Ω=4/5`) | `49.28M` (`36.69M`) | `19,599 MB` | `~11,500` | `4.5935` / `98.84` | **`4.5618` / `95.75`** | `lyap` locked TRUE SILENT `-0.00104`, `ws_entropy: 4.382 -> 1.757` (soliton condensation confirmed!) |
 
-- **Now Running (`p19285`):** **10,000-step (`81.92M` token)** extended comparison (`rpp W=128` -> `gpt` -> `rmsn Ω=4/5`).
+### 10,000-Step (`81.92M` tokens) Extended Showdown (`p19285`, In Progress)
+| Arch | Total (Backbone) | Peak VRAM | Speed (tok/s) | 40-batch `val_ce` / `val_ppl` | **Full 774-batch `val_ce` / `val_ppl`** | Key Finding |
+|---|---|---|---|---|---|---|
+| **`gpt`** | `45.95M` (`33.37M`) | `2,884 MB` | `~64,000` | `3.6615` / `38.92` | **`3.6212` / `37.38`** | Clean scaling (`-13.35 PPL` from 5k); global causal attention widens edge to `0.0911 nats` over local `W=128` |
+| **`rpp` (`W=128` + POVM)** | `46.10M` (`33.52M`) | **`1,370 MB`** | `~27,900` | `3.7636` / `43.10` | **`3.7123` / `40.95`** | **Smashes 5k GPT (`50.73`) by nearly 10 PPL at `2.1×` less VRAM** (`povm_scale -> 38.53`, `-12.63 PPL` from 5k, `0` NaNs) |
+| **`rmsn`** (`Ω=4/5`) | `49.28M` (`36.69M`) | `19,599 MB` | `~11,500` | *Running...* | *Running...* | Launched `15:56Z`; tracking `ws_entropy` compression below `1.757` & semantic alignment |
 
 ---
 
