@@ -89,9 +89,11 @@ class WindowAttnSubBlock(nn.Module):
         self.qkv = nn.Linear(d_model, 3 * d_model, bias=False)
         self.o_proj = nn.Linear(d_model, d_model, bias=False)
 
-        self.norm2 = RMSNorm(d_model)
-        self.w13 = nn.Linear(d_model, 2 * ffn_dim, bias=False)
-        self.w2 = nn.Linear(ffn_dim, d_model, bias=False)
+        self.ffn_dim = ffn_dim
+        if ffn_dim > 0:
+            self.norm2 = RMSNorm(d_model)
+            self.w13 = nn.Linear(d_model, 2 * ffn_dim, bias=False)
+            self.w2 = nn.Linear(ffn_dim, d_model, bias=False)
 
     def forward(self, p: torch.Tensor, rope_cos: torch.Tensor, rope_sin: torch.Tensor) -> torch.Tensor:
         B, T, D = p.shape
@@ -102,6 +104,8 @@ class WindowAttnSubBlock(nn.Module):
         v = v.view(B, T, self.n_heads, self.head_dim)
         out = sliding_window_causal_sdpa(q, k, v, window=self.window).view(B, T, D)
         delta = self.o_proj(out)
+        if self.ffn_dim <= 0:
+            return delta
 
         h2 = self.norm2(p + delta)
         u, g = self.w13(h2).chunk(2, dim=-1)
@@ -271,6 +275,8 @@ class RPPLM(nn.Module):
         window: int = 64,
         global_layers: tuple[int, ...] = (),
         ffn_dim: int = 480,
+        f_ffn_dim: int = None,
+        g_ffn_dim: int = None,
         max_seq_len: int = 1024,
         use_hybrid_delta: bool = False,
         use_povm_head: bool = True,
@@ -283,6 +289,9 @@ class RPPLM(nn.Module):
         self.use_hybrid_delta = use_hybrid_delta
         self.use_povm_head = use_povm_head
 
+        f_ffn = ffn_dim if f_ffn_dim is None else f_ffn_dim
+        g_ffn = ffn_dim if g_ffn_dim is None else g_ffn_dim
+
         self.embed = nn.Embedding(vocab_size, d_emb)
         nn.init.normal_(self.embed.weight, std=0.02)
         self.emb_up_q = nn.Linear(d_emb, d_model, bias=False)
@@ -290,13 +299,13 @@ class RPPLM(nn.Module):
 
         global_set = set(self.global_layers)
         self.f_blocks = nn.ModuleList([
-            WindowAttnSubBlock(d_model, n_heads=n_heads, window=(0 if i in global_set else window), ffn_dim=ffn_dim)
+            WindowAttnSubBlock(d_model, n_heads=n_heads, window=(0 if i in global_set else window), ffn_dim=f_ffn)
             for i in range(n_layers)
         ])
         self.g_blocks = nn.ModuleList([
             DeltaSubBlock(d_model, n_heads=n_heads, chunk_size=window, ffn_dim=320)
             if (use_hybrid_delta and i % 2 == 0)
-            else DualTimescaleScanSubBlock(d_model, n_heads=n_heads, ffn_dim=ffn_dim)
+            else DualTimescaleScanSubBlock(d_model, n_heads=n_heads, ffn_dim=g_ffn)
             for i in range(n_layers)
         ])
         self.norm_out = RMSNorm(d_model)
@@ -314,9 +323,11 @@ class RPPLM(nn.Module):
         res_std = 0.02 / math.sqrt(2 * n_layers)
         for fb, gb in zip(self.f_blocks, self.g_blocks):
             nn.init.normal_(fb.o_proj.weight, std=res_std)
-            nn.init.normal_(fb.w2.weight, std=res_std)
+            if hasattr(fb, "w2"):
+                nn.init.normal_(fb.w2.weight, std=res_std)
             nn.init.normal_(gb.o_proj.weight, std=res_std)
-            nn.init.normal_(gb.w2.weight, std=res_std)
+            if hasattr(gb, "w2"):
+                nn.init.normal_(gb.w2.weight, std=res_std)
 
     def _init_weights(self, m):
         if isinstance(m, nn.Linear) and m not in (self.emb_up_q, self.emb_up_p):
