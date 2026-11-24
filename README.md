@@ -166,8 +166,8 @@ Rigorous verification suite for the **`37.03 < 37.38` GPT win** across matched s
 In standard `RPPLM` (`0.5 * (q + p)`), after `R(π/4)` at final layer `L9`, `(c - s) p_mid` cancels algebraically (`0.5*(q_out + p_out) = (1/sqrt(2)) q_mid`), hiding `50%` of the final `(q, p)` phase-space manifold (`L9`'s `g_block` update). `dual_read=True` projects `[RMSNorm(q), RMSNorm(p)] -> Linear(2D, d_emb)` at exact `46.10M` parity (`f=g=732`):
 | Arch | Config | Peak VRAM | Speed (tok/s) | 40-batch `val_ce` / `val_ppl` | **Full 774-batch `val_ce` / `val_ppl`** | Status / Note |
 |---|---|---|---|---|---|---|
-| **`rpp_5g_pure_rev_dualread_lin`** | `cat[norm(q), norm(p)]` (`46.10M`, `s42`) | *Running...* | *Running...* | *Running...* | *Running...* | Launched (`~29m`); exposes full `2D=1024` manifold to logits |
-| **`rpp_5g_pure_rev_lin` (`s7`)** | `--seed 7` (`46.09M`) | *Queued* | *Queued* | *Queued* | *Queued* | Queued (`~29m`); 3rd seed for robust mean |
+| **`rpp_5g_pure_rev_dualread_lin`** | `cat[norm(q), norm(p)]` (`46.10M`, `s42`) | **`1,232 MB`** | `~44,900` | **`3.6223` / `37.42`** | **`3.5799` / `35.87`** | **NEW ALL-TIME PRISM CHAMPION — CRUSHES MATCHED `GPT` (`37.38`) BY `-1.51 PPL` (`-0.0413 nats`) AT `2.34×` LESS VRAM (`1,232` vs `2,884 MB`)!** Fixing `L9` readout cancellation unlocks `-1.16 PPL` past `pure_rev_lin` (`37.03`) while stabilizing stream RMS (`6.37 / 6.53` vs `17.09 / 17.18`, `0` NaNs) |
+| **`rpp_5g_pure_rev_lin` (`s7`)** | `--seed 7` (`46.09M`) | `1,229 MB` | `~45,200` | *Running...* | *Running...* | Running now (`~29m`); 3rd seed for `0.5*(q+p)` mean |
 | **`gpt` (`s7`)** | `--seed 7` (`45.95M`) | *Queued* | *Queued* | *Queued* | *Queued* | Queued (`~21m`); 3rd seed baseline |
 
 ---
