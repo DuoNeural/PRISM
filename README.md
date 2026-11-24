@@ -174,8 +174,8 @@ In standard `RPPLM` (`0.5 * (q + p)`), after `R(π/4)` at final layer `L9`, `(c 
 Validates `rpp_5g_pure_rev_dualread_lin` across 3 matched seeds (`s42, s123, s7`) and tests `30,000`-step (`245.76M`-token) horizon scaling head-to-head vs `gpt`:
 | Arch | Config | Peak VRAM | Speed (tok/s) | 40-batch `val_ce` / `val_ppl` | **Full 774-batch `val_ce` / `val_ppl`** | Status / Note |
 |---|---|---|---|---|---|---|
-| **`rpp_5g_pure_rev_dualread_lin` (`s123`)** | `--seed 123`, `10k` (`46.10M`) | *Running...* | *Running...* | *Running...* | *Running...* | Running now (`~31.5m`); 2nd seed for `dualread` CI |
-| **`rpp_5g_pure_rev_dualread_lin` (`s7`)** | `--seed 7`, `10k` (`46.10M`) | *Queued* | *Queued* | *Queued* | *Queued* | Queued (`~31.5m`); completes 3-seed CI vs `gpt` (`37.480`) |
+| **`rpp_5g_pure_rev_dualread_lin` (`s123`)** | `--seed 123`, `10k` (`46.10M`) | **`1,232 MB`** | `~44,700` | `3.6283` / `37.65` | **`3.5919` / `36.30`** | **Even the weaker `s123` seed crushes EVERY `gpt` seed (`37.38–37.54`) by `>-1.08 PPL`!** (`-1.36 PPL` vs old `pure_rev s123` `37.66`; 2-seed mean = **`36.085`** vs `gpt` `37.480`, **`0` NaNs**, `q_rms=7.05 / p_rms=6.76`) |
+| **`rpp_5g_pure_rev_dualread_lin` (`s7`)** | `--seed 7`, `10k` (`46.10M`) | `1,232 MB` | `~44,500` | *Running...* | *Running...* | Running now (`~31m`); completes 3-seed CI vs `gpt` (`37.480`) |
 | **`rpp_5g_pure_rev_dualread_lin` (`30k`)** | `--seed 42`, `30k` (`245.76M tok`) | *Queued* | *Queued* | *Queued* | *Queued* | Queued (`~92m`); tests `3×` horizon scaling |
 | **`gpt` (`30k`)** | `--seed 42`, `30k` (`245.76M tok`) | *Queued* | *Queued* | *Queued* | *Queued* | Queued (`~65m`); matched `30k` baseline |
 
