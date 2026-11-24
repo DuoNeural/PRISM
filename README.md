@@ -157,8 +157,8 @@ Rigorous verification suite for the **`37.03 < 37.38` GPT win** across matched s
 |---|---|---|---|---|---|---|
 | **`rpp_5g_pure_rev_lin` (`s123`)** | `--seed 123` (`46.09M`) | `1,229 MB` | `~45,000` | `3.6660` / `39.10` | **`3.6285` / `37.66`** | **2-seed mean = `37.345 PPL`** (`s42=37.03, s123=37.66`) — edges `gpt` (`37.45`) by **`-0.105 PPL`** at **`2.37×` less VRAM** |
 | **`gpt` (`s123`)** | `--seed 123` (`45.95M`) | `2,908 MB` | `~62,400` | `3.6602` / `38.87` | **`3.6249` / `37.52`** | **2-seed mean = `37.45 PPL`** (`s42=37.38, s123=37.52`, `2,908 MB` VRAM) |
-| **`rpp_pure_rev_global_lin`** | `10/10` global (`d_scan=0`, `46.09M`) | **`1,198 MB`** | **`~45,900`** | *Running...* | *Running...* | Launched `06:35Z` (`~28m`); `5g` alternating vs `10/10` global ablation |
-| **`rpp_5g_pure_rev_nohadamard_lin`** | `use_symp_mix=False` (`46.09M`) | — | — | *Queued* | *Queued* | Isolates `π/4` Hadamard necessity in `d_scan=0` |
+| **`rpp_pure_rev_global_lin`** | `10/10` global (`d_scan=0`, `46.09M`) | **`1,198 MB`** | **`~45,900`** | `3.6558` / `38.70` | **`3.6168` / `37.22`** | **Beats `gpt` (`37.38`) at `2.41×` less VRAM, yet trails `5g` (`37.03`) by `+0.19 PPL`!** Confirms alternating `W=128` + global beats all-global even with `d_scan=0` |
+| **`rpp_5g_pure_rev_nohadamard_lin`** | `use_symp_mix=False` (`46.09M`) | **`1,181 MB`** | **`~47,300`** | *Running...* | *Running...* | Launched `07:06Z` (`~28m`); isolates `π/4` Hadamard necessity in `d_scan=0` |
 
 ---
 
