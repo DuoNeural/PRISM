@@ -130,12 +130,17 @@ Builds directly on top of **`rpp_bridge_5g`** (`39.46 PPL` previous record) with
 | **`rpp_5g_symp_mix`** | `R(θ)` only (`46.10M`) | `1,378 MB` | `~27,000` | `3.7299` / `41.67` | **`3.6789` / `39.60`** | Learned `|mix_thetas|` stayed tiny (`0.0074–0.0146` rad, `max=0.0451`); `0`-init rotation alone stayed decoupled |
 | **`rpp_5g_wide_ou`** | `d_scan=128`, `f=g=672` (`46.10M`) | **`1,383 MB`** | `~27,800` | **`3.7208` / `41.30`** | **`3.6707` / `39.28`** | **NEW PRISM RPP CHAMPION (`-0.18 PPL` vs `bridge_5g`, `-1.67 PPL` vs `W=128`)!** `+40%` wider SwiGLU on both streams beats full `d_scan=512` OU at `1.38 GB` VRAM (`0` NaNs) |
 
-### v0.9 Hadamard `π/4` Symplectic Mixing + 10k Head Check (`p19285`, In Progress)
-Two surgical follow-ups on **`rpp_5g_wide_ou` (`39.28 PPL`)** to isolate stream mixing vs POVM head behavior at `10k` (`81.92M` tokens):
+### v0.9 Hadamard `π/4` Symplectic Mixing + 10k Head Crossover (`p19285`, Complete)
+Two surgical follow-ups on **`rpp_5g_wide_ou` (`39.28 PPL`)** that uncovered BOTH the `π/4` mixing lift and a sharp `5k -> 10k` output-head crossover:
 | Arch | Config | Peak VRAM | Speed (tok/s) | 40-batch `val_ce` / `val_ppl` | **Full 774-batch `val_ce` / `val_ppl`** | Key Finding |
 |---|---|---|---|---|---|---|
-| **`rpp_5g_hadamard_wide_ou`** | `θ_0=π/4`, `d_scan=128`, `f=g=672` (`46.10M`) | **`1,383 MB`** | `~27,200` | **`3.7052` / `40.66`** | **`3.6534` / `38.60`** | **BROKE `39 PPL` — NEW PRISM RPP CHAMPION (`-0.68 PPL` vs `θ=0` `39.28`)!** Angles stayed at `0.783–0.799` rad (`~45°`), proving `θ=0` was symmetry-trapped while Hadamard `(q±p)/√2` mixing closes `65%` of total gap to GPT at **`2.08×` less VRAM** (`0` NaNs) |
-| **`rpp_5g_wide_ou_lin`** | `θ=0`, `FactorizedTiedHead` (`46.10M`) | **`1,226 MB`** | **`~36,000`** | *Running...* | *Running...* | Launched `02:18Z` (`~37m`) to test whether Born POVM still beats linear softmax at `10k` / `~39 PPL` |
+| **`rpp_5g_hadamard_wide_ou`** | `θ_0=π/4`, `d_scan=128`, `f=g=672`, POVM (`46.10M`) | `1,383 MB` | `~27,200` | `3.7052` / `40.66` | **`3.6534` / `38.60`** | **`-0.68 PPL` vs `θ=0` (`39.28`):** `mix_thetas` stayed centered at `0.783–0.799` rad (`~45°`), breaking symmetry trap |
+| **`rpp_5g_wide_ou_lin`** | `θ=0`, `d_scan=128`, `f=g=672`, Linear (`46.10M`) | **`1,226 MB`** | **`~36,000`** | **`3.6763` / `39.50`** | **`3.6358` / `37.93`** | **BROKE `38 PPL` AT `1.23 GB` (`-1.35 PPL` vs POVM `39.28`, within `0.55 PPL` of `gpt` `37.38`)!** Proves **Head Crossover**: Born POVM wins at `5k` (`>50 PPL`), while `FactorizedTiedHead` wins at `10k` (`<40 PPL`) where calibrated log-probabilities need unconstrained logit magnitudes |
+
+### v1.0 Combining Both Winners: Hadamard `π/4` + Compact OU + Linear Head (`p19285`, Launching)
+Stacks our two `v0.9` breakthroughs (`π/4` Hadamard `-0.68 PPL` + `FactorizedTiedHead` `-1.35 PPL`) to challenge matched full-attention `gpt` (`37.38 PPL`) at **`2.35×` less VRAM (`1,226 MB`)**:
+- **`rpp_5g_hadamard_wide_ou_lin`**: `θ_0=π/4`, `d_scan=128`, `f=g=672`, Linear head (`46.10M`)
+- **`rpp_5g_hadamard_ultra_lin`**: `θ_0=π/4`, `d_scan=64`, `f=g=704`, Linear head (`46.10M`)
 
 ---
 
@@ -161,4 +166,6 @@ PYTHONPATH=. python3 train_smoke.py --arch rpp_5g_symp_mix --window 128 --steps 
 PYTHONPATH=. python3 train_smoke.py --arch rpp_5g_wide_ou --window 128 --steps 10000 --data /workspace/rmsn_data/tokens_wiki103_full.pt --out runs/v08_10k_rpp_5g_wide_ou
 PYTHONPATH=. python3 train_smoke.py --arch rpp_5g_hadamard_wide_ou --window 128 --steps 10000 --data /workspace/rmsn_data/tokens_wiki103_full.pt --out runs/v09_10k_rpp_5g_hadamard_wide_ou
 PYTHONPATH=. python3 train_smoke.py --arch rpp_5g_wide_ou_lin --window 128 --steps 10000 --data /workspace/rmsn_data/tokens_wiki103_full.pt --out runs/v09_10k_rpp_5g_wide_ou_lin
+PYTHONPATH=. python3 train_smoke.py --arch rpp_5g_hadamard_wide_ou_lin --window 128 --steps 10000 --data /workspace/rmsn_data/tokens_wiki103_full.pt --out runs/v10_10k_rpp_5g_hadamard_wide_ou_lin
+PYTHONPATH=. python3 train_smoke.py --arch rpp_5g_hadamard_ultra_lin --window 128 --steps 10000 --data /workspace/rmsn_data/tokens_wiki103_full.pt --out runs/v10_10k_rpp_5g_hadamard_ultra_lin
 ```

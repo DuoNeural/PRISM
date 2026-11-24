@@ -284,6 +284,8 @@ def test_param_parity_and_step0():
         "rpp_5g_wide_ou": RPPLM(window=128, global_layers=(1, 3, 5, 7, 9), f_ffn_dim=672, g_ffn_dim=672, d_scan=128, use_symp_mix=True, use_hybrid_delta=False, use_povm_head=True),
         "rpp_5g_hadamard_wide_ou": RPPLM(window=128, global_layers=(1, 3, 5, 7, 9), f_ffn_dim=672, g_ffn_dim=672, d_scan=128, use_symp_mix=True, symp_mix_init=math.pi / 4.0, use_hybrid_delta=False, use_povm_head=True),
         "rpp_5g_wide_ou_lin": RPPLM(window=128, global_layers=(1, 3, 5, 7, 9), f_ffn_dim=672, g_ffn_dim=672, d_scan=128, use_symp_mix=True, use_hybrid_delta=False, use_povm_head=False),
+        "rpp_5g_hadamard_wide_ou_lin": RPPLM(window=128, global_layers=(1, 3, 5, 7, 9), f_ffn_dim=672, g_ffn_dim=672, d_scan=128, use_symp_mix=True, symp_mix_init=math.pi / 4.0, use_hybrid_delta=False, use_povm_head=False),
+        "rpp_5g_hadamard_ultra_lin": RPPLM(window=128, global_layers=(1, 3, 5, 7, 9), f_ffn_dim=704, g_ffn_dim=704, d_scan=64, use_symp_mix=True, symp_mix_init=math.pi / 4.0, use_hybrid_delta=False, use_povm_head=False),
         "rpp_lin": RPPLM(use_hybrid_delta=False, use_povm_head=False),
         "rpp_delta": RPPLM(use_hybrid_delta=True),
         "rmsn": RMSNOmega45LM(),
