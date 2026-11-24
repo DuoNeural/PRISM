@@ -130,10 +130,12 @@ Builds directly on top of **`rpp_bridge_5g`** (`39.46 PPL` previous record) with
 | **`rpp_5g_symp_mix`** | `R(θ)` only (`46.10M`) | `1,378 MB` | `~27,000` | `3.7299` / `41.67` | **`3.6789` / `39.60`** | Learned `|mix_thetas|` stayed tiny (`0.0074–0.0146` rad, `max=0.0451`); `0`-init rotation alone stayed decoupled |
 | **`rpp_5g_wide_ou`** | `d_scan=128`, `f=g=672` (`46.10M`) | **`1,383 MB`** | `~27,800` | **`3.7208` / `41.30`** | **`3.6707` / `39.28`** | **NEW PRISM RPP CHAMPION (`-0.18 PPL` vs `bridge_5g`, `-1.67 PPL` vs `W=128`)!** `+40%` wider SwiGLU on both streams beats full `d_scan=512` OU at `1.38 GB` VRAM (`0` NaNs) |
 
-### v0.9 Hadamard `π/4` Symplectic Mixing + 10k Head Check (`p19285`, Launching)
-Two surgical follow-ups on **`rpp_5g_wide_ou` (`39.28 PPL`)** to isolate stream mixing vs POVM head saturation at `10k` (`81.92M` tokens):
-- **`rpp_5g_hadamard_wide_ou`**: Exact `rpp_5g_wide_ou` with **`symp_mix_init = π/4`** (`45°` orthogonal `(q±p)/√2` mixing per layer from step 0 — zero new params, `46.10M` parity).
-- **`rpp_5g_wide_ou_lin`**: Exact `rpp_5g_wide_ou` with `FactorizedTiedHead` (`use_povm_head=False`) to test whether Born POVM retains its `5k` `-1.04 PPL` lead at `10k` / `~39 PPL`.
+### v0.9 Hadamard `π/4` Symplectic Mixing + 10k Head Check (`p19285`, In Progress)
+Two surgical follow-ups on **`rpp_5g_wide_ou` (`39.28 PPL`)** to isolate stream mixing vs POVM head behavior at `10k` (`81.92M` tokens):
+| Arch | Config | Peak VRAM | Speed (tok/s) | 40-batch `val_ce` / `val_ppl` | **Full 774-batch `val_ce` / `val_ppl`** | Key Finding |
+|---|---|---|---|---|---|---|
+| **`rpp_5g_hadamard_wide_ou`** | `θ_0=π/4`, `d_scan=128`, `f=g=672` (`46.10M`) | **`1,383 MB`** | `~27,200` | **`3.7052` / `40.66`** | **`3.6534` / `38.60`** | **BROKE `39 PPL` — NEW PRISM RPP CHAMPION (`-0.68 PPL` vs `θ=0` `39.28`)!** Angles stayed at `0.783–0.799` rad (`~45°`), proving `θ=0` was symmetry-trapped while Hadamard `(q±p)/√2` mixing closes `65%` of total gap to GPT at **`2.08×` less VRAM** (`0` NaNs) |
+| **`rpp_5g_wide_ou_lin`** | `θ=0`, `FactorizedTiedHead` (`46.10M`) | **`1,226 MB`** | **`~36,000`** | *Running...* | *Running...* | Launched `02:18Z` (`~37m`) to test whether Born POVM still beats linear softmax at `10k` / `~39 PPL` |
 
 ---
 
