@@ -151,14 +151,16 @@ Removing the OU scan (`d_scan = 0`) and reinvesting parameters directly into pur
 | **`ultra_lin` (`W=256`)** | `W=256` on `L0,2,4,6,8`, `d_scan=64`, `f=g=704` (`46.10M`) | `1,233 MB` | `~36,900` | `3.6793` / `39.62` | **`3.6366` / `37.96`** | **Falsified (`+0.29 PPL` vs `W=128` `37.67`):** confirms the alternating U-curve — strict `W=128` local bias beats `W=256` |
 | **`rpp_5g_pure_rev_lin`** | `d_scan=0`, `π/4` Hadamard, `f=g=736` (`46.09M`) | **`1,229 MB`** | **`~45,400`** | **`3.6515` / `38.53`** | **`3.6118` / `37.03`** | **ALL-TIME CHAMPION — BEATS MATCHED `GPT` (`37.38`) BY `-0.35 PPL` AT `2.35×` LESS VRAM (`1,229` vs `2,884 MB`)!** Proves the bit-exact reversible `(q, p)` carrier + `5g` alternating local/global + `π/4` Hadamard outperforms standard Transformers at parity (`0` NaNs) |
 
-### v1.2 Multi-Seed Reproducibility & Carrier Decomposition (`p19285`, In Progress)
+### v1.2 Multi-Seed Reproducibility & Carrier Decomposition (`p19285`, Complete)
 Rigorous verification suite for the **`37.03 < 37.38` GPT win** across matched seeds and causal carrier ablations:
 | Arch | Config | Peak VRAM | Speed (tok/s) | 40-batch `val_ce` / `val_ppl` | **Full 774-batch `val_ce` / `val_ppl`** | Status / Note |
 |---|---|---|---|---|---|---|
 | **`rpp_5g_pure_rev_lin` (`s123`)** | `--seed 123` (`46.09M`) | `1,229 MB` | `~45,000` | `3.6660` / `39.10` | **`3.6285` / `37.66`** | **2-seed mean = `37.345 PPL`** (`s42=37.03, s123=37.66`) — edges `gpt` (`37.45`) by **`-0.105 PPL`** at **`2.37×` less VRAM** |
 | **`gpt` (`s123`)** | `--seed 123` (`45.95M`) | `2,908 MB` | `~62,400` | `3.6602` / `38.87` | **`3.6249` / `37.52`** | **2-seed mean = `37.45 PPL`** (`s42=37.38, s123=37.52`, `2,908 MB` VRAM) |
 | **`rpp_pure_rev_global_lin`** | `10/10` global (`d_scan=0`, `46.09M`) | **`1,198 MB`** | **`~45,900`** | `3.6558` / `38.70` | **`3.6168` / `37.22`** | **Beats `gpt` (`37.38`) at `2.41×` less VRAM, yet trails `5g` (`37.03`) by `+0.19 PPL`!** Confirms alternating `W=128` + global beats all-global even with `d_scan=0` |
-| **`rpp_5g_pure_rev_nohadamard_lin`** | `use_symp_mix=False` (`46.09M`) | **`1,181 MB`** | **`~47,300`** | *Running...* | *Running...* | Launched `07:06Z` (`~28m`); isolates `π/4` Hadamard necessity in `d_scan=0` |
+| **`rpp_5g_pure_rev_nohadamard_lin`** | `use_symp_mix=False` (`46.09M`) | **`1,181 MB`** | **`~47,200`** | `3.6866` / `39.91` | **`3.6454` / `38.30`** | **`+1.27 PPL` worse than `37.03`!** Proves $\pi/4$ symplectic Hadamard mixing is **load-bearing** when `d_scan=0`: without it, canonical stream equipartition breaks (`q_rms=5.89, p_rms=8.24` vs `17.09 / 17.18`) |
+
+**v1.2 Key Proof — Symplectic Equipartition:** Disabling the orthogonal Givens rotation `R(π/4)` (`nohadamard_lin`) breaks `(q, p)` virial balance (`5.89` vs `8.24` RMS, `2.5×` lower stream energy) and degrades full validation perplexity by **`+1.27 PPL`** (`37.03 -> 38.30`), whereas `R(π/4)` enforces `~1.00:1.00` stream equipartition across all tested configurations (`s42: 17.09/17.18`, `s123: 16.14/16.02`, `global: 15.22/15.17`).
 
 ---
 
