@@ -155,9 +155,9 @@ Removing the OU scan (`d_scan = 0`) and reinvesting parameters directly into pur
 Rigorous verification suite for the **`37.03 < 37.38` GPT win** across matched seeds and causal carrier ablations:
 | Arch | Config | Peak VRAM | Speed (tok/s) | 40-batch `val_ce` / `val_ppl` | **Full 774-batch `val_ce` / `val_ppl`** | Status / Note |
 |---|---|---|---|---|---|---|
-| **`rpp_5g_pure_rev_lin` (`s123`)** | `--seed 123` (`46.09M`) | `1,229 MB` | `~45,000` | `3.6660` / `39.10` | **`3.6285` / `37.66`** | Seed-2 completed (`+0.63` vs `s42`); checking matched `gpt --seed 123` to separate shuffle variance |
-| **`gpt` (`s123`)** | `--seed 123` (`45.95M`) | `2,908 MB` | `~62,400` | *Running...* | *Running...* | Launched `06:12Z` (`~20m`); matched Seed-2 `GPT` comparison |
-| **`rpp_pure_rev_global_lin`** | `10/10` global (`d_scan=0`, `46.09M`) | — | — | *Queued* | *Queued* | `5g` alternating vs `10/10` global ablation |
+| **`rpp_5g_pure_rev_lin` (`s123`)** | `--seed 123` (`46.09M`) | `1,229 MB` | `~45,000` | `3.6660` / `39.10` | **`3.6285` / `37.66`** | **2-seed mean = `37.345 PPL`** (`s42=37.03, s123=37.66`) — edges `gpt` (`37.45`) by **`-0.105 PPL`** at **`2.37×` less VRAM** |
+| **`gpt` (`s123`)** | `--seed 123` (`45.95M`) | `2,908 MB` | `~62,400` | `3.6602` / `38.87` | **`3.6249` / `37.52`** | **2-seed mean = `37.45 PPL`** (`s42=37.38, s123=37.52`, `2,908 MB` VRAM) |
+| **`rpp_pure_rev_global_lin`** | `10/10` global (`d_scan=0`, `46.09M`) | **`1,198 MB`** | **`~45,900`** | *Running...* | *Running...* | Launched `06:35Z` (`~28m`); `5g` alternating vs `10/10` global ablation |
 | **`rpp_5g_pure_rev_nohadamard_lin`** | `use_symp_mix=False` (`46.09M`) | — | — | *Queued* | *Queued* | Isolates `π/4` Hadamard necessity in `d_scan=0` |
 
 ---
