@@ -137,10 +137,12 @@ Two surgical follow-ups on **`rpp_5g_wide_ou` (`39.28 PPL`)** that uncovered BOT
 | **`rpp_5g_hadamard_wide_ou`** | `θ_0=π/4`, `d_scan=128`, `f=g=672`, POVM (`46.10M`) | `1,383 MB` | `~27,200` | `3.7052` / `40.66` | **`3.6534` / `38.60`** | **`-0.68 PPL` vs `θ=0` (`39.28`):** `mix_thetas` stayed centered at `0.783–0.799` rad (`~45°`), breaking symmetry trap |
 | **`rpp_5g_wide_ou_lin`** | `θ=0`, `d_scan=128`, `f=g=672`, Linear (`46.10M`) | **`1,226 MB`** | **`~36,000`** | **`3.6763` / `39.50`** | **`3.6358` / `37.93`** | **BROKE `38 PPL` AT `1.23 GB` (`-1.35 PPL` vs POVM `39.28`, within `0.55 PPL` of `gpt` `37.38`)!** Proves **Head Crossover**: Born POVM wins at `5k` (`>50 PPL`), while `FactorizedTiedHead` wins at `10k` (`<40 PPL`) where calibrated log-probabilities need unconstrained logit magnitudes |
 
-### v1.0 Combining Both Winners: Hadamard `π/4` + Compact OU + Linear Head (`p19285`, Launching)
-Stacks our two `v0.9` breakthroughs (`π/4` Hadamard `-0.68 PPL` + `FactorizedTiedHead` `-1.35 PPL`) to challenge matched full-attention `gpt` (`37.38 PPL`) at **`2.35×` less VRAM (`1,226 MB`)**:
-- **`rpp_5g_hadamard_wide_ou_lin`**: `θ_0=π/4`, `d_scan=128`, `f=g=672`, Linear head (`46.10M`)
-- **`rpp_5g_hadamard_ultra_lin`**: `θ_0=π/4`, `d_scan=64`, `f=g=704`, Linear head (`46.10M`)
+### v1.0 Combining Hadamard `π/4` + Compact OU + Linear Head (`p19285`, In Progress)
+Tests stacking `π/4` Hadamard mixing and `d_scan` compaction onto `FactorizedTiedHead` (`~1.23 GB` VRAM, **`2.35×` less than GPT**):
+| Arch | Config | Peak VRAM | Speed (tok/s) | 40-batch `val_ce` / `val_ppl` | **Full 774-batch `val_ce` / `val_ppl`** | Key Finding |
+|---|---|---|---|---|---|---|
+| **`rpp_5g_hadamard_wide_ou_lin`** | `θ_0=π/4`, `d_scan=128`, `f=g=672`, Linear (`46.10M`) | **`1,226 MB`** | `~36,000` | `3.6771` / `39.53` | **`3.6367` / `37.96`** | **Ties `θ=0` Linear (`37.93`) cleanly!** Exposes clean `2×2` law: `π/4` Hadamard boosts unit-sphere Born POVM (`39.28 -> 38.60`), while `FactorizedTiedHead` already hits `37.93–37.96` (`0.55 PPL` shy of GPT) regardless of `θ_0` |
+| **`rpp_5g_hadamard_ultra_lin`** | `θ_0=π/4`, `d_scan=64`, `f=g=704`, Linear (`46.10M`) | `~1,226 MB` | `~36,000` | *Running...* | *Running...* | Launched `03:40Z` (`~37m`) to push SwiGLU width (`704`) via `d_scan=64` |
 
 ---
 
