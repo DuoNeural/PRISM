@@ -176,8 +176,8 @@ Validates `rpp_5g_pure_rev_dualread_lin` across 3 matched seeds (`s42, s123, s7`
 |---|---|---|---|---|---|---|
 | **`rpp_5g_pure_rev_dualread_lin` (`s123`)** | `--seed 123`, `10k` (`46.10M`) | **`1,232 MB`** | `~44,700` | `3.6283` / `37.65` | **`3.5919` / `36.30`** | **Even the weaker `s123` seed crushes EVERY `gpt` seed (`37.38–37.54`) by `>-1.08 PPL`!** (`-1.36 PPL` vs old `pure_rev s123` `37.66`; 2-seed mean = **`36.085`** vs `gpt` `37.480`, **`0` NaNs**, `q_rms=7.05 / p_rms=6.76`) |
 | **`rpp_5g_pure_rev_dualread_lin` (`s7`)** | `--seed 7`, `10k` (`46.10M`) | **`1,232 MB`** | `~45,100` | **`3.6169` / `37.22`** | **`3.5763` / `35.74`** | **NEW ALL-TIME RECORD (`35.74 PPL`) & 3-SEED CI LOCKED: `dualread_lin` mean = `35.970 ± 0.293` vs `gpt` mean = `37.480 ± 0.087` (`-1.510 PPL` advantage, zero interval overlap, `2.36×` less VRAM, `0` NaNs)** |
-| **`rpp_5g_pure_rev_dualread_lin` (`30k`)** | `--seed 42`, `30k` (`245.76M tok`) | `1,232 MB` | `~45,300` | *Running...* | *Running...* | Running now (`~90m`, past step `500`); tests `3×` horizon scaling |
-| **`gpt` (`30k`)** | `--seed 42`, `30k` (`245.76M tok`) | *Queued* | *Queued* | *Queued* | *Queued* | Queued (`~65m`); matched `30k` baseline |
+| **`rpp_5g_pure_rev_dualread_lin` (`30k`)** | `--seed 42`, `30k` (`245.76M tok`) | **`1,232 MB`** | `~44,500` | **`3.3484` / `28.46`** | **`3.3071` / `27.31`** | **SCALES CLEANLY `-8.56 PPL` PAST `10k` (`35.87 -> 27.31`)!** Monotonic improvement every `2.5k` steps (`69.65 -> 51.21 -> 45.02 -> 41.18 -> 38.04 -> 35.63 -> 33.89 -> 32.01 -> 30.55 -> 29.58 -> 28.77 -> 28.46`), zero NaNs, stream RMS settles balanced (`7.78 / 7.84`) |
+| **`gpt` (`30k`)** | `--seed 42`, `30k` (`245.76M tok`) | `2,908 MB` | `~64,000` | *Running...* | *Running...* | Running now (`~64m`, past step `900`); matched `30k` baseline |
 
 ---
 
