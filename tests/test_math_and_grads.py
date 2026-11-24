@@ -270,6 +270,7 @@ def test_param_parity_and_step0():
 
     specs = {
         "gpt": GPTBaselineLM(),
+        "gpt_100m": GPTBaselineLM(d_model=768, n_layers=12, n_heads=12, ffn_dim=2164),
         "ldg": LDGLM(use_povm_head=False),
         "ldg_povm": LDGLM(use_povm_head=True),
         "kcw": KCWLM(),
@@ -290,6 +291,7 @@ def test_param_parity_and_step0():
         "rpp_pure_rev_global_lin": RPPLM(window=0, global_layers=tuple(range(10)), f_ffn_dim=736, g_ffn_dim=736, d_scan=0, use_symp_mix=True, symp_mix_init=math.pi / 4.0, use_hybrid_delta=False, use_povm_head=False),
         "rpp_5g_pure_rev_nohadamard_lin": RPPLM(window=128, global_layers=(1, 3, 5, 7, 9), f_ffn_dim=736, g_ffn_dim=736, d_scan=0, use_symp_mix=False, use_hybrid_delta=False, use_povm_head=False),
         "rpp_5g_pure_rev_dualread_lin": RPPLM(window=128, global_layers=(1, 3, 5, 7, 9), f_ffn_dim=732, g_ffn_dim=732, d_scan=0, use_symp_mix=True, symp_mix_init=math.pi / 4.0, use_hybrid_delta=False, use_povm_head=False, dual_read=True),
+        "rpp_5g_pure_rev_dualread_lin_100m": RPPLM(d_model=768, n_layers=12, n_heads=12, window=128, global_layers=(1, 3, 5, 7, 9, 11), f_ffn_dim=1076, g_ffn_dim=1076, d_scan=0, use_symp_mix=True, symp_mix_init=math.pi / 4.0, use_hybrid_delta=False, use_povm_head=False, dual_read=True),
         "rpp_lin": RPPLM(use_hybrid_delta=False, use_povm_head=False),
         "rpp_delta": RPPLM(use_hybrid_delta=True),
         "rmsn": RMSNOmega45LM(),

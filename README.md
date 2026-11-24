@@ -170,14 +170,21 @@ In standard `RPPLM` (`0.5 * (q + p)`), after `R(π/4)` at final layer `L9`, `(c 
 | **`rpp_5g_pure_rev_lin` (`s7`)** | `--seed 7` (`46.09M`) | **`1,229 MB`** | `~45,400` | `3.6509` / `38.51` | **`3.6113` / `37.01`** | **3-seed mean = `37.233 PPL`** (`s42=37.03, s123=37.66, s7=37.01`) at **`2.37×` less VRAM**; two of three seeds sit at `37.01–37.03` |
 | **`gpt` (`s7`)** | `--seed 7` (`45.95M`) | `2,908 MB` | `~63,600` | `3.6617` / `38.93` | **`3.6254` / `37.54`** | **3-seed `gpt` mean = `37.480 PPL`** (`s42=37.38, s123=37.52, s7=37.54`); old `0.5*(q+p)` beats `gpt` mean by `-0.247 PPL` |
 
-### v1.4 Dual-Read 3-Seed CI & 30k Scaling Horizon (`p19285`, In Progress)
+### v1.4 Dual-Read 3-Seed CI & 30k Scaling Horizon (`p19285`, Complete)
 Validates `rpp_5g_pure_rev_dualread_lin` across 3 matched seeds (`s42, s123, s7`) and tests `30,000`-step (`245.76M`-token) horizon scaling head-to-head vs `gpt`:
 | Arch | Config | Peak VRAM | Speed (tok/s) | 40-batch `val_ce` / `val_ppl` | **Full 774-batch `val_ce` / `val_ppl`** | Status / Note |
 |---|---|---|---|---|---|---|
 | **`rpp_5g_pure_rev_dualread_lin` (`s123`)** | `--seed 123`, `10k` (`46.10M`) | **`1,232 MB`** | `~44,700` | `3.6283` / `37.65` | **`3.5919` / `36.30`** | **Even the weaker `s123` seed crushes EVERY `gpt` seed (`37.38–37.54`) by `>-1.08 PPL`!** (`-1.36 PPL` vs old `pure_rev s123` `37.66`; 2-seed mean = **`36.085`** vs `gpt` `37.480`, **`0` NaNs**, `q_rms=7.05 / p_rms=6.76`) |
-| **`rpp_5g_pure_rev_dualread_lin` (`s7`)** | `--seed 7`, `10k` (`46.10M`) | **`1,232 MB`** | `~45,100` | **`3.6169` / `37.22`** | **`3.5763` / `35.74`** | **NEW ALL-TIME RECORD (`35.74 PPL`) & 3-SEED CI LOCKED: `dualread_lin` mean = `35.970 ± 0.293` vs `gpt` mean = `37.480 ± 0.087` (`-1.510 PPL` advantage, zero interval overlap, `2.36×` less VRAM, `0` NaNs)** |
-| **`rpp_5g_pure_rev_dualread_lin` (`30k`)** | `--seed 42`, `30k` (`245.76M tok`) | **`1,232 MB`** | `~44,500` | **`3.3484` / `28.46`** | **`3.3071` / `27.31`** | **SCALES CLEANLY `-8.56 PPL` PAST `10k` (`35.87 -> 27.31`)!** Monotonic improvement every `2.5k` steps (`69.65 -> 51.21 -> 45.02 -> 41.18 -> 38.04 -> 35.63 -> 33.89 -> 32.01 -> 30.55 -> 29.58 -> 28.77 -> 28.46`), zero NaNs, stream RMS settles balanced (`7.78 / 7.84`) |
-| **`gpt` (`30k`)** | `--seed 42`, `30k` (`245.76M tok`) | `2,908 MB` | `~64,000` | *Running...* | *Running...* | Running now (`~64m`, past step `900`); matched `30k` baseline |
+| **`rpp_5g_pure_rev_dualread_lin` (`s7`)** | `--seed 7`, `10k` (`46.10M`) | **`1,232 MB`** | `~45,100` | **`3.6169` / `37.22`** | **`3.5763` / `35.74`** | **NEW ALL-TIME `10k` RECORD (`35.74 PPL`) & 3-SEED CI LOCKED: `dualread_lin` mean = `35.970 ± 0.293` vs `gpt` mean = `37.480 ± 0.087` (`-1.510 PPL` advantage, zero interval overlap, `2.36×` less VRAM, `0` NaNs)** |
+| **`rpp_5g_pure_rev_dualread_lin` (`30k`)** | `--seed 42`, `30k` (`245.76M tok`) | **`1,232 MB`** | `~44,500` | `3.3484` / `28.46` | **`3.3071` / `27.31`** | **Sample-efficiency lead (`-2.50 PPL` at `2.5k`, `-1.51` at `10k`), converges identically (`27.31` vs `27.25`, `+0.0022 nats`) at `2.36×` less VRAM (`0` NaNs, `q_rms=7.78 / p_rms=7.84`)** |
+| **`gpt` (`30k`)** | `--seed 42`, `30k` (`245.76M tok`) | `2,908 MB` | **`~64,000`** | **`3.3481` / `28.45`** | **`3.3049` / `27.25`** | **Essential convergence tie at `46M` capacity / `1.94×` WikiText-103 epochs (`train_ce 3.1900` vs `3.1901`):** PRISM reaches the asymptote faster (`10k: 35.97 vs 37.48`) at `2.36×` lower VRAM |
+
+### v1.5 `~100M` Scale-Up (`d_model=768, n_layers=12, n_heads=12`, `p19285`, In Progress)
+Tests whether `dualread_lin`'s sample-efficiency and `~2.4×` VRAM advantage hold at `~101M` matched parameters (`global_layers=(1,3,5,7,9,11)` vs 12-layer full-attention `gpt_100m`):
+| Arch | Config | Peak VRAM | Speed (tok/s) | 40-batch `val_ce` / `val_ppl` | **Full 774-batch `val_ce` / `val_ppl`** | Status / Note |
+|---|---|---|---|---|---|---|
+| **`rpp_5g_pure_rev_dualread_lin_100m`** | `d=768, L=12, f=g=1076` (`101.22M`, `s42, 10k`) | *Running...* | *Running...* | *Running...* | *Running...* | Running now (`V15_QUEUE_PID=47585`); quantifies `101M` PPL & VRAM savings vs matched `gpt_100m` |
+| **`gpt_100m`** | `d=768, L=12, ffn=2164` (`101.14M`, `s42, 10k`) | *Queued* | *Queued* | *Queued* | *Queued* | Queued right behind; matched `101.14M` full-attention baseline |
 
 ---
 
