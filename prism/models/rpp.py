@@ -320,8 +320,10 @@ class RPPLM(nn.Module):
         max_seq_len: int = 1024,
         use_hybrid_delta: bool = False,
         use_povm_head: bool = True,
+        dual_read: bool = False,
     ):
         super().__init__()
+        assert not (dual_read and use_povm_head), "dual_read requires use_povm_head=False"
         self.vocab_size = vocab_size
         self.d_emb = d_emb
         self.d_model = d_model
@@ -329,6 +331,7 @@ class RPPLM(nn.Module):
         self.use_symp_mix = use_symp_mix
         self.use_hybrid_delta = use_hybrid_delta
         self.use_povm_head = use_povm_head
+        self.dual_read = dual_read
 
         f_ffn = ffn_dim if f_ffn_dim is None else f_ffn_dim
         g_ffn = ffn_dim if g_ffn_dim is None else g_ffn_dim
@@ -354,10 +357,12 @@ class RPPLM(nn.Module):
             if use_symp_mix else None
         )
         self.norm_out = RMSNorm(d_model)
+        self.norm_out_p = RMSNorm(d_model) if dual_read else None
         if use_povm_head:
             self.head = BornLogPOVMHead(d_model, d_emb, init_scale=12.0, eps=1e-6, chunk_size=128, mode="amplitude")
         else:
-            self.head = FactorizedTiedHead(d_model, d_emb, chunk_size=256)
+            head_in_dim = 2 * d_model if dual_read else d_model
+            self.head = FactorizedTiedHead(head_in_dim, d_emb, chunk_size=256)
 
         cos, sin = build_rope_cache(max_seq_len, d_model // n_heads)
         self.register_buffer("rope_cos", cos, persistent=False)
@@ -391,12 +396,16 @@ class RPPLM(nn.Module):
 
     def forward_hidden(self, input_ids: torch.Tensor):
         q, p = self.forward_streams(input_ids)
-        h = self.norm_out(0.5 * (q + p))
-        return h
+        if self.dual_read:
+            return torch.cat([self.norm_out(q), self.norm_out_p(p)], dim=-1)
+        return self.norm_out(0.5 * (q + p))
 
     def forward(self, input_ids: torch.Tensor, targets: torch.Tensor = None):
         q, p = self.forward_streams(input_ids)
-        h = self.norm_out(0.5 * (q + p))
+        if self.dual_read:
+            h = torch.cat([self.norm_out(q), self.norm_out_p(p)], dim=-1)
+        else:
+            h = self.norm_out(0.5 * (q + p))
         with torch.no_grad():
             stream_q_rms = q.pow(2).mean().sqrt().item()
             stream_p_rms = p.pow(2).mean().sqrt().item()

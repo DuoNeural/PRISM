@@ -162,6 +162,14 @@ Rigorous verification suite for the **`37.03 < 37.38` GPT win** across matched s
 
 **v1.2 Key Proof — Symplectic Equipartition:** Disabling the orthogonal Givens rotation `R(π/4)` (`nohadamard_lin`) breaks `(q, p)` virial balance (`5.89` vs `8.24` RMS, `2.5×` lower stream energy) and degrades full validation perplexity by **`+1.27 PPL`** (`37.03 -> 38.30`), whereas `R(π/4)` enforces `~1.00:1.00` stream equipartition across all tested configurations (`s42: 17.09/17.18`, `s123: 16.14/16.02`, `global: 15.22/15.17`).
 
+### v1.3 Dual-Stream Readout & 3rd-Seed Verification (`p19285`, In Progress)
+In standard `RPPLM` (`0.5 * (q + p)`), after `R(π/4)` at final layer `L9`, `(c - s) p_mid` cancels algebraically (`0.5*(q_out + p_out) = (1/sqrt(2)) q_mid`), hiding `50%` of the final `(q, p)` phase-space manifold (`L9`'s `g_block` update). `dual_read=True` projects `[RMSNorm(q), RMSNorm(p)] -> Linear(2D, d_emb)` at exact `46.10M` parity (`f=g=732`):
+| Arch | Config | Peak VRAM | Speed (tok/s) | 40-batch `val_ce` / `val_ppl` | **Full 774-batch `val_ce` / `val_ppl`** | Status / Note |
+|---|---|---|---|---|---|---|
+| **`rpp_5g_pure_rev_dualread_lin`** | `cat[norm(q), norm(p)]` (`46.10M`, `s42`) | *Running...* | *Running...* | *Running...* | *Running...* | Launched (`~29m`); exposes full `2D=1024` manifold to logits |
+| **`rpp_5g_pure_rev_lin` (`s7`)** | `--seed 7` (`46.09M`) | *Queued* | *Queued* | *Queued* | *Queued* | Queued (`~29m`); 3rd seed for robust mean |
+| **`gpt` (`s7`)** | `--seed 7` (`45.95M`) | *Queued* | *Queued* | *Queued* | *Queued* | Queued (`~21m`); 3rd seed baseline |
+
 ---
 
 ## Quick Usage (Research Harness)
