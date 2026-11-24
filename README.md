@@ -137,12 +137,17 @@ Two surgical follow-ups on **`rpp_5g_wide_ou` (`39.28 PPL`)** that uncovered BOT
 | **`rpp_5g_hadamard_wide_ou`** | `θ_0=π/4`, `d_scan=128`, `f=g=672`, POVM (`46.10M`) | `1,383 MB` | `~27,200` | `3.7052` / `40.66` | **`3.6534` / `38.60`** | **`-0.68 PPL` vs `θ=0` (`39.28`):** `mix_thetas` stayed centered at `0.783–0.799` rad (`~45°`), breaking symmetry trap |
 | **`rpp_5g_wide_ou_lin`** | `θ=0`, `d_scan=128`, `f=g=672`, Linear (`46.10M`) | **`1,226 MB`** | **`~36,000`** | **`3.6763` / `39.50`** | **`3.6358` / `37.93`** | **BROKE `38 PPL` AT `1.23 GB` (`-1.35 PPL` vs POVM `39.28`, within `0.55 PPL` of `gpt` `37.38`)!** Proves **Head Crossover**: Born POVM wins at `5k` (`>50 PPL`), while `FactorizedTiedHead` wins at `10k` (`<40 PPL`) where calibrated log-probabilities need unconstrained logit magnitudes |
 
-### v1.0 Combining Hadamard `π/4` + Compact OU + Linear Head (`p19285`, In Progress)
-Tests stacking `π/4` Hadamard mixing and `d_scan` compaction onto `FactorizedTiedHead` (`~1.23 GB` VRAM, **`2.35×` less than GPT**):
+### v1.0 Combining Hadamard `π/4` + Compact OU + Linear Head (`p19285`, Complete)
+Tests stacking `π/4` Hadamard mixing and `d_scan` compaction onto `FactorizedTiedHead` (`~1.23 GB` VRAM, **`2.34×` less than GPT**):
 | Arch | Config | Peak VRAM | Speed (tok/s) | 40-batch `val_ce` / `val_ppl` | **Full 774-batch `val_ce` / `val_ppl`** | Key Finding |
 |---|---|---|---|---|---|---|
-| **`rpp_5g_hadamard_wide_ou_lin`** | `θ_0=π/4`, `d_scan=128`, `f=g=672`, Linear (`46.10M`) | **`1,226 MB`** | `~36,000` | `3.6771` / `39.53` | **`3.6367` / `37.96`** | **Ties `θ=0` Linear (`37.93`) cleanly!** Exposes clean `2×2` law: `π/4` Hadamard boosts unit-sphere Born POVM (`39.28 -> 38.60`), while `FactorizedTiedHead` already hits `37.93–37.96` (`0.55 PPL` shy of GPT) regardless of `θ_0` |
-| **`rpp_5g_hadamard_ultra_lin`** | `θ_0=π/4`, `d_scan=64`, `f=g=704`, Linear (`46.10M`) | `~1,226 MB` | `~36,000` | *Running...* | *Running...* | Launched `03:40Z` (`~37m`) to push SwiGLU width (`704`) via `d_scan=64` |
+| **`rpp_5g_hadamard_wide_ou_lin`** | `θ_0=π/4`, `d_scan=128`, `f=g=672`, Linear (`46.10M`) | **`1,226 MB`** | `~36,000` | `3.6771` / `39.53` | **`3.6367` / `37.96`** | **Ties `θ=0` Linear (`37.93`) cleanly!** Exposes clean `2×2` law: `π/4` Hadamard boosts unit-sphere Born POVM (`39.28 -> 38.60`), while `FactorizedTiedHead` hits `37.93–37.96` regardless of `θ_0` |
+| **`rpp_5g_hadamard_ultra_lin`** | `θ_0=π/4`, `d_scan=64`, `f=g=704`, Linear (`46.10M`) | **`1,231 MB`** | **`~36,000`** | **`3.6686` / `39.20`** | **`3.6289` / `37.67`** | **NEW PRISM RPP CHAMPION — WITHIN `0.29 PPL` (`0.0077 nats`) OF `gpt` (`37.38`) AT `2.34×` LESS VRAM!** SwiGLU `704` + `d_scan=64` drops `-0.29 PPL` past `hadamard_wide_ou_lin` (`0` NaNs) |
+
+### v1.1 Closing the Final `0.29 PPL` vs `GPT` (`p19285`, Launching)
+Two zero-extra-parameter tests agreed upon with Archon to challenge `gpt`'s `37.38 PPL` at `~1.23 GB` VRAM:
+- **Option A (`rpp_5g_hadamard_ultra_lin --window 256`):** Doubles local context window (`W=128 -> 256`) on `L0,2,4,6,8` at identical `46.10M` params & `1.23 GB` VRAM.
+- **Option B (`rpp_5g_pure_rev_lin`):** Drops `d_scan=0` -> **`f=g=736`** (`14,720` total SwiGLU neurons, matching `gpt`'s FFN neuron budget `10 × 1472`) to test whether `d_scan=64` OU still adds value over pure reversible Attention+SwiGLU.
 
 ---
 
@@ -170,4 +175,6 @@ PYTHONPATH=. python3 train_smoke.py --arch rpp_5g_hadamard_wide_ou --window 128 
 PYTHONPATH=. python3 train_smoke.py --arch rpp_5g_wide_ou_lin --window 128 --steps 10000 --data /workspace/rmsn_data/tokens_wiki103_full.pt --out runs/v09_10k_rpp_5g_wide_ou_lin
 PYTHONPATH=. python3 train_smoke.py --arch rpp_5g_hadamard_wide_ou_lin --window 128 --steps 10000 --data /workspace/rmsn_data/tokens_wiki103_full.pt --out runs/v10_10k_rpp_5g_hadamard_wide_ou_lin
 PYTHONPATH=. python3 train_smoke.py --arch rpp_5g_hadamard_ultra_lin --window 128 --steps 10000 --data /workspace/rmsn_data/tokens_wiki103_full.pt --out runs/v10_10k_rpp_5g_hadamard_ultra_lin
+PYTHONPATH=. python3 train_smoke.py --arch rpp_5g_hadamard_ultra_lin --window 256 --steps 10000 --data /workspace/rmsn_data/tokens_wiki103_full.pt --out runs/v11_10k_rpp_5g_ultra_lin_w256
+PYTHONPATH=. python3 train_smoke.py --arch rpp_5g_pure_rev_lin --window 128 --steps 10000 --data /workspace/rmsn_data/tokens_wiki103_full.pt --out runs/v11_10k_rpp_5g_pure_rev_lin
 ```

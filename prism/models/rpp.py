@@ -119,27 +119,33 @@ class DualTimescaleScanSubBlock(nn.Module):
         self.d_model = d_model
         self.d_scan = d_model if d_scan is None else d_scan
         self.n_heads = n_heads
-        self.head_dim = self.d_scan // n_heads
-        self.n_osc = self.head_dim // 2
-        self.h_half = n_heads // 2  # half fast heads, half slow heads
+        if self.d_scan > 0:
+            self.head_dim = self.d_scan // n_heads
+            self.n_osc = self.head_dim // 2
+            self.h_half = n_heads // 2  # half fast heads, half slow heads
 
-        self.norm1 = RMSNorm(d_model)
-        self.drive_proj = nn.Linear(d_model, self.d_scan, bias=False)
-        self.gate_proj = nn.Linear(d_model, self.d_scan, bias=False)
-        self.o_proj = nn.Linear(self.d_scan, d_model, bias=False)
+            self.norm1 = RMSNorm(d_model)
+            self.drive_proj = nn.Linear(d_model, self.d_scan, bias=False)
+            self.gate_proj = nn.Linear(d_model, self.d_scan, bias=False)
+            self.o_proj = nn.Linear(self.d_scan, d_model, bias=False)
 
-        # Strictly ordered disjoint decay rates:
-        # Fast: gamma in [1/32, 1.0] (tau_f in [1, 32])
-        # Slow: gamma in [1/1024, 1/64] (tau_s in [64, 1024])
-        self.theta_fast = nn.Parameter(torch.zeros(1, 1, self.h_half, self.n_osc))
-        self.theta_slow = nn.Parameter(torch.zeros(1, 1, self.h_half, self.n_osc))
-        self.omega_base = nn.Parameter(torch.linspace(0.05, 1.2, n_heads * self.n_osc).view(1, 1, n_heads, self.n_osc))
+            # Strictly ordered disjoint decay rates:
+            # Fast: gamma in [1/32, 1.0] (tau_f in [1, 32])
+            # Slow: gamma in [1/1024, 1/64] (tau_s in [64, 1024])
+            self.theta_fast = nn.Parameter(torch.zeros(1, 1, self.h_half, self.n_osc))
+            self.theta_slow = nn.Parameter(torch.zeros(1, 1, self.h_half, self.n_osc))
+            self.omega_base = nn.Parameter(torch.linspace(0.05, 1.2, n_heads * self.n_osc).view(1, 1, n_heads, self.n_osc))
 
         self.norm2 = RMSNorm(d_model)
         self.w13 = nn.Linear(d_model, 2 * ffn_dim, bias=False)
         self.w2 = nn.Linear(ffn_dim, d_model, bias=False)
 
     def forward(self, q: torch.Tensor) -> torch.Tensor:
+        if self.d_scan <= 0:
+            h2 = self.norm2(q)
+            u1, g1 = self.w13(h2).chunk(2, dim=-1)
+            return self.w2(F.silu(u1) * g1)
+
         B, T, _ = q.shape
         H, M = self.n_heads, self.n_osc
         h = self.norm1(q)
@@ -364,7 +370,8 @@ class RPPLM(nn.Module):
             nn.init.normal_(fb.o_proj.weight, std=res_std)
             if hasattr(fb, "w2"):
                 nn.init.normal_(fb.w2.weight, std=res_std)
-            nn.init.normal_(gb.o_proj.weight, std=res_std)
+            if hasattr(gb, "o_proj"):
+                nn.init.normal_(gb.o_proj.weight, std=res_std)
             if hasattr(gb, "w2"):
                 nn.init.normal_(gb.w2.weight, std=res_std)
 

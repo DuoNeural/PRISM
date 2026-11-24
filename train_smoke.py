@@ -77,6 +77,8 @@ def build_model(arch: str, vocab: int, seq_len: int, window: int = 64):
         return RPPLM(vocab_size=vocab, max_seq_len=max(seq_len, 1024), window=window, global_layers=(1, 3, 5, 7, 9), f_ffn_dim=672, g_ffn_dim=672, d_scan=128, use_symp_mix=True, symp_mix_init=math.pi / 4.0, use_hybrid_delta=False, use_povm_head=False)
     if arch == "rpp_5g_hadamard_ultra_lin":
         return RPPLM(vocab_size=vocab, max_seq_len=max(seq_len, 1024), window=window, global_layers=(1, 3, 5, 7, 9), f_ffn_dim=704, g_ffn_dim=704, d_scan=64, use_symp_mix=True, symp_mix_init=math.pi / 4.0, use_hybrid_delta=False, use_povm_head=False)
+    if arch == "rpp_5g_pure_rev_lin":
+        return RPPLM(vocab_size=vocab, max_seq_len=max(seq_len, 1024), window=window, global_layers=(1, 3, 5, 7, 9), f_ffn_dim=736, g_ffn_dim=736, d_scan=0, use_symp_mix=True, symp_mix_init=math.pi / 4.0, use_hybrid_delta=False, use_povm_head=False)
     if arch == "rpp_lin":
         return RPPLM(vocab_size=vocab, max_seq_len=max(seq_len, 1024), window=window, use_hybrid_delta=False, use_povm_head=False)
     if arch == "rpp_delta":
@@ -114,7 +116,7 @@ def evaluate(model, val_dl, device, max_batches: int = 40):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--arch", required=True, choices=["gpt", "ldg", "ldg_povm", "kcw", "rpp", "rpp_bridge_1g", "rpp_bridge_2g", "rpp_bridge_5g", "rpp_global_all", "rpp_symp_ffn_1g", "rpp_symp_ffn_global", "rpp_5g_symp_mix", "rpp_5g_wide_ou", "rpp_5g_hadamard_wide_ou", "rpp_5g_wide_ou_lin", "rpp_5g_hadamard_wide_ou_lin", "rpp_5g_hadamard_ultra_lin", "rpp_lin", "rpp_delta", "rmsn"])
+    p.add_argument("--arch", required=True, choices=["gpt", "ldg", "ldg_povm", "kcw", "rpp", "rpp_bridge_1g", "rpp_bridge_2g", "rpp_bridge_5g", "rpp_global_all", "rpp_symp_ffn_1g", "rpp_symp_ffn_global", "rpp_5g_symp_mix", "rpp_5g_wide_ou", "rpp_5g_hadamard_wide_ou", "rpp_5g_wide_ou_lin", "rpp_5g_hadamard_wide_ou_lin", "rpp_5g_hadamard_ultra_lin", "rpp_5g_pure_rev_lin", "rpp_lin", "rpp_delta", "rmsn"])
     p.add_argument("--data", default="/workspace/rmsn_data/tokens_wiki103_full.pt")
     p.add_argument("--out", required=True)
     p.add_argument("--vocab", type=int, default=49152)
