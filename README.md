@@ -123,10 +123,12 @@ Tests whether eliminating `F(p)`'s split `480`-dim FFN (`f_ffn_dim=0`, pure Caus
 | **`rpp_symp_ffn_1g`** | `L9` (`1/10`) | `1,377 MB` | **`~30,300`** | `3.7565` / `42.80` | **`3.7042` / `40.62`** | **Falsified (`+0.79 PPL` vs `rpp_bridge_1g` `39.83`):** `+10%` faster, but removing `F(p)`'s nonlinear FFN starves `q`-stream mixing (`stream_q_rms` drops `0.74` vs `p`'s `2.69`) |
 | **`rpp_symp_ffn_global`** | All (`10/10`) | `1,379 MB` | **`~30,600`** | `3.7585` / `42.88` | **`3.7054` / `40.67`** | **Confirmed falsification (`+0.98 PPL` vs `rpp_global_all` `39.69`):** proves BOTH `q` and `p` streams require nonlinear FFN channel mixing |
 
-### v0.8 Exact Symplectic Givens `(q,p)` Mixing + Compact-OU Wide FFN (`p19285`, Now Running)
+### v0.8 Exact Symplectic Givens `(q,p)` Mixing + Compact-OU Wide FFN (`p19285`, In Progress)
 Builds directly on top of **`rpp_bridge_5g`** (`39.46 PPL` champion) without starving either stream:
-- **`rpp_5g_symp_mix`** (`46.10M`): Exact `rpp_bridge_5g` + learnable per-channel **Symplectic Givens Rotation $R(\theta)$** (`+5,120` params, exact inverse $R(-\theta)=R(\theta)^T$, `0 MB` extra VRAM) mixing `(q, p)` phase coordinates every layer.
-- **`rpp_5g_wide_ou`** (`46.10M`): `rpp_5g_symp_mix` + compact **`d_scan=128` OU scan** freeing `~5.9M` OU projection params to widen **BOTH** `F(p)` and `G(q)` SwiGLUs by `+40%` (`f_ffn_dim = g_ffn_dim = 672`).
+| Arch | Config | Peak VRAM | Speed (tok/s) | 40-batch `val_ce` / `val_ppl` | **Full 774-batch `val_ce` / `val_ppl`** | Key Finding |
+|---|---|---|---|---|---|---|
+| **`rpp_5g_symp_mix`** | `R(θ)` only (`46.10M`) | `1,378 MB` | `~27,000` | `3.7299` / `41.67` | **`3.6789` / `39.60`** | Learned `|mix_thetas|` stayed tiny (`0.0074–0.0146` rad, `max=0.0451`); rotation alone didn't beat `bridge_5g` (`39.46`) |
+| **`rpp_5g_wide_ou`** | `d_scan=128`, `f=g=672` (`46.10M`) | `1,383 MB` | `~27,600` | *Running...* | *Running...* | Launched `00:21Z`; faster early drop (`786.36` vs `797.99` at step 150, `gn=1.429`) |
 
 ---
 
