@@ -162,13 +162,22 @@ Rigorous verification suite for the **`37.03 < 37.38` GPT win** across matched s
 
 **v1.2 Key Proof — Symplectic Equipartition:** Disabling the orthogonal Givens rotation `R(π/4)` (`nohadamard_lin`) breaks `(q, p)` virial balance (`5.89` vs `8.24` RMS, `2.5×` lower stream energy) and degrades full validation perplexity by **`+1.27 PPL`** (`37.03 -> 38.30`), whereas `R(π/4)` enforces `~1.00:1.00` stream equipartition across all tested configurations (`s42: 17.09/17.18`, `s123: 16.14/16.02`, `global: 15.22/15.17`).
 
-### v1.3 Dual-Stream Readout & 3rd-Seed Verification (`p19285`, In Progress)
+### v1.3 Dual-Stream Readout & 3rd-Seed Verification (`p19285`, Complete)
 In standard `RPPLM` (`0.5 * (q + p)`), after `R(π/4)` at final layer `L9`, `(c - s) p_mid` cancels algebraically (`0.5*(q_out + p_out) = (1/sqrt(2)) q_mid`), hiding `50%` of the final `(q, p)` phase-space manifold (`L9`'s `g_block` update). `dual_read=True` projects `[RMSNorm(q), RMSNorm(p)] -> Linear(2D, d_emb)` at exact `46.10M` parity (`f=g=732`):
 | Arch | Config | Peak VRAM | Speed (tok/s) | 40-batch `val_ce` / `val_ppl` | **Full 774-batch `val_ce` / `val_ppl`** | Status / Note |
 |---|---|---|---|---|---|---|
 | **`rpp_5g_pure_rev_dualread_lin`** | `cat[norm(q), norm(p)]` (`46.10M`, `s42`) | **`1,232 MB`** | `~44,900` | **`3.6223` / `37.42`** | **`3.5799` / `35.87`** | **NEW ALL-TIME PRISM CHAMPION — CRUSHES MATCHED `GPT` (`37.38`) BY `-1.51 PPL` (`-0.0413 nats`) AT `2.34×` LESS VRAM (`1,232` vs `2,884 MB`)!** Fixing `L9` readout cancellation unlocks `-1.16 PPL` past `pure_rev_lin` (`37.03`) while stabilizing stream RMS (`6.37 / 6.53` vs `17.09 / 17.18`, `0` NaNs) |
 | **`rpp_5g_pure_rev_lin` (`s7`)** | `--seed 7` (`46.09M`) | **`1,229 MB`** | `~45,400` | `3.6509` / `38.51` | **`3.6113` / `37.01`** | **3-seed mean = `37.233 PPL`** (`s42=37.03, s123=37.66, s7=37.01`) at **`2.37×` less VRAM**; two of three seeds sit at `37.01–37.03` |
-| **`gpt` (`s7`)** | `--seed 7` (`45.95M`) | `2,908 MB` | `~63,400` | *Running...* | *Running...* | Running now (`~21m`); 3rd seed baseline |
+| **`gpt` (`s7`)** | `--seed 7` (`45.95M`) | `2,908 MB` | `~63,600` | `3.6617` / `38.93` | **`3.6254` / `37.54`** | **3-seed `gpt` mean = `37.480 PPL`** (`s42=37.38, s123=37.52, s7=37.54`); old `0.5*(q+p)` beats `gpt` mean by `-0.247 PPL` |
+
+### v1.4 Dual-Read 3-Seed CI & 30k Scaling Horizon (`p19285`, In Progress)
+Validates `rpp_5g_pure_rev_dualread_lin` across 3 matched seeds (`s42, s123, s7`) and tests `30,000`-step (`245.76M`-token) horizon scaling head-to-head vs `gpt`:
+| Arch | Config | Peak VRAM | Speed (tok/s) | 40-batch `val_ce` / `val_ppl` | **Full 774-batch `val_ce` / `val_ppl`** | Status / Note |
+|---|---|---|---|---|---|---|
+| **`rpp_5g_pure_rev_dualread_lin` (`s123`)** | `--seed 123`, `10k` (`46.10M`) | *Running...* | *Running...* | *Running...* | *Running...* | Running now (`~31.5m`); 2nd seed for `dualread` CI |
+| **`rpp_5g_pure_rev_dualread_lin` (`s7`)** | `--seed 7`, `10k` (`46.10M`) | *Queued* | *Queued* | *Queued* | *Queued* | Queued (`~31.5m`); completes 3-seed CI vs `gpt` (`37.480`) |
+| **`rpp_5g_pure_rev_dualread_lin` (`30k`)** | `--seed 42`, `30k` (`245.76M tok`) | *Queued* | *Queued* | *Queued* | *Queued* | Queued (`~92m`); tests `3×` horizon scaling |
+| **`gpt` (`30k`)** | `--seed 42`, `30k` (`245.76M tok`) | *Queued* | *Queued* | *Queued* | *Queued* | Queued (`~65m`); matched `30k` baseline |
 
 ---
 
