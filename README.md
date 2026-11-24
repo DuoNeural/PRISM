@@ -123,12 +123,17 @@ Tests whether eliminating `F(p)`'s split `480`-dim FFN (`f_ffn_dim=0`, pure Caus
 | **`rpp_symp_ffn_1g`** | `L9` (`1/10`) | `1,377 MB` | **`~30,300`** | `3.7565` / `42.80` | **`3.7042` / `40.62`** | **Falsified (`+0.79 PPL` vs `rpp_bridge_1g` `39.83`):** `+10%` faster, but removing `F(p)`'s nonlinear FFN starves `q`-stream mixing (`stream_q_rms` drops `0.74` vs `p`'s `2.69`) |
 | **`rpp_symp_ffn_global`** | All (`10/10`) | `1,379 MB` | **`~30,600`** | `3.7585` / `42.88` | **`3.7054` / `40.67`** | **Confirmed falsification (`+0.98 PPL` vs `rpp_global_all` `39.69`):** proves BOTH `q` and `p` streams require nonlinear FFN channel mixing |
 
-### v0.8 Exact Symplectic Givens `(q,p)` Mixing + Compact-OU Wide FFN (`p19285`, In Progress)
-Builds directly on top of **`rpp_bridge_5g`** (`39.46 PPL` champion) without starving either stream:
+### v0.8 Exact Symplectic Givens `(q,p)` Mixing + Compact-OU Wide FFN (`p19285`, Complete)
+Builds directly on top of **`rpp_bridge_5g`** (`39.46 PPL` previous record) without starving either stream:
 | Arch | Config | Peak VRAM | Speed (tok/s) | 40-batch `val_ce` / `val_ppl` | **Full 774-batch `val_ce` / `val_ppl`** | Key Finding |
 |---|---|---|---|---|---|---|
-| **`rpp_5g_symp_mix`** | `R(θ)` only (`46.10M`) | `1,378 MB` | `~27,000` | `3.7299` / `41.67` | **`3.6789` / `39.60`** | Learned `|mix_thetas|` stayed tiny (`0.0074–0.0146` rad, `max=0.0451`); rotation alone didn't beat `bridge_5g` (`39.46`) |
-| **`rpp_5g_wide_ou`** | `d_scan=128`, `f=g=672` (`46.10M`) | `1,383 MB` | `~27,600` | *Running...* | *Running...* | Launched `00:21Z`; faster early drop (`786.36` vs `797.99` at step 150, `gn=1.429`) |
+| **`rpp_5g_symp_mix`** | `R(θ)` only (`46.10M`) | `1,378 MB` | `~27,000` | `3.7299` / `41.67` | **`3.6789` / `39.60`** | Learned `|mix_thetas|` stayed tiny (`0.0074–0.0146` rad, `max=0.0451`); `0`-init rotation alone stayed decoupled |
+| **`rpp_5g_wide_ou`** | `d_scan=128`, `f=g=672` (`46.10M`) | **`1,383 MB`** | `~27,800` | **`3.7208` / `41.30`** | **`3.6707` / `39.28`** | **NEW PRISM RPP CHAMPION (`-0.18 PPL` vs `bridge_5g`, `-1.67 PPL` vs `W=128`)!** `+40%` wider SwiGLU on both streams beats full `d_scan=512` OU at `1.38 GB` VRAM (`0` NaNs) |
+
+### v0.9 Hadamard `π/4` Symplectic Mixing + 10k Head Check (`p19285`, Launching)
+Two surgical follow-ups on **`rpp_5g_wide_ou` (`39.28 PPL`)** to isolate stream mixing vs POVM head saturation at `10k` (`81.92M` tokens):
+- **`rpp_5g_hadamard_wide_ou`**: Exact `rpp_5g_wide_ou` with **`symp_mix_init = π/4`** (`45°` orthogonal `(q±p)/√2` mixing per layer from step 0 — zero new params, `46.10M` parity).
+- **`rpp_5g_wide_ou_lin`**: Exact `rpp_5g_wide_ou` with `FactorizedTiedHead` (`use_povm_head=False`) to test whether Born POVM retains its `5k` `-1.04 PPL` lead at `10k` / `~39 PPL`.
 
 ---
 
@@ -152,4 +157,6 @@ PYTHONPATH=. python3 train_smoke.py --arch rpp_symp_ffn_1g --window 128 --steps 
 PYTHONPATH=. python3 train_smoke.py --arch rpp_symp_ffn_global --window 0 --steps 10000 --data /workspace/rmsn_data/tokens_wiki103_full.pt --out runs/v07_10k_rpp_symp_ffn_global
 PYTHONPATH=. python3 train_smoke.py --arch rpp_5g_symp_mix --window 128 --steps 10000 --data /workspace/rmsn_data/tokens_wiki103_full.pt --out runs/v08_10k_rpp_5g_symp_mix
 PYTHONPATH=. python3 train_smoke.py --arch rpp_5g_wide_ou --window 128 --steps 10000 --data /workspace/rmsn_data/tokens_wiki103_full.pt --out runs/v08_10k_rpp_5g_wide_ou
+PYTHONPATH=. python3 train_smoke.py --arch rpp_5g_hadamard_wide_ou --window 128 --steps 10000 --data /workspace/rmsn_data/tokens_wiki103_full.pt --out runs/v09_10k_rpp_5g_hadamard_wide_ou
+PYTHONPATH=. python3 train_smoke.py --arch rpp_5g_wide_ou_lin --window 128 --steps 10000 --data /workspace/rmsn_data/tokens_wiki103_full.pt --out runs/v09_10k_rpp_5g_wide_ou_lin
 ```

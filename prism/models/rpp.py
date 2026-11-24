@@ -310,6 +310,7 @@ class RPPLM(nn.Module):
         g_ffn_dim: int = None,
         d_scan: int = None,
         use_symp_mix: bool = False,
+        symp_mix_init: float = 0.0,
         max_seq_len: int = 1024,
         use_hybrid_delta: bool = False,
         use_povm_head: bool = True,
@@ -343,7 +344,7 @@ class RPPLM(nn.Module):
             for i in range(n_layers)
         ])
         self.mix_thetas = (
-            nn.ParameterList([nn.Parameter(torch.zeros(d_model)) for _ in range(n_layers)])
+            nn.ParameterList([nn.Parameter(torch.full((d_model,), float(symp_mix_init))) for _ in range(n_layers)])
             if use_symp_mix else None
         )
         self.norm_out = RMSNorm(d_model)
