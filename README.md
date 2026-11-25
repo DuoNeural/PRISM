@@ -179,12 +179,12 @@ Validates `rpp_5g_pure_rev_dualread_lin` across 3 matched seeds (`s42, s123, s7`
 | **`rpp_5g_pure_rev_dualread_lin` (`30k`)** | `--seed 42`, `30k` (`245.76M tok`) | **`1,232 MB`** | `~44,500` | `3.3484` / `28.46` | **`3.3071` / `27.31`** | **Sample-efficiency lead (`-2.50 PPL` at `2.5k`, `-1.51` at `10k`), converges identically (`27.31` vs `27.25`, `+0.0022 nats`) at `2.36×` less VRAM (`0` NaNs, `q_rms=7.78 / p_rms=7.84`)** |
 | **`gpt` (`30k`)** | `--seed 42`, `30k` (`245.76M tok`) | `2,908 MB` | **`~64,000`** | **`3.3481` / `28.45`** | **`3.3049` / `27.25`** | **Essential convergence tie at `46M` capacity / `1.94×` WikiText-103 epochs (`train_ce 3.1900` vs `3.1901`):** PRISM reaches the asymptote faster (`10k: 35.97 vs 37.48`) at `2.36×` lower VRAM |
 
-### v1.5 `~100M` Scale-Up (`d_model=768, n_layers=12, n_heads=12`, `p19285`, In Progress)
+### v1.5 `~101M` Scale-Up (`d_model=768, n_layers=12, n_heads=12`, `p19285`, Complete)
 Tests whether `dualread_lin`'s sample-efficiency and `~2.4×` VRAM advantage hold at `~101M` matched parameters (`global_layers=(1,3,5,7,9,11)` vs 12-layer full-attention `gpt_100m`):
 | Arch | Config | Peak VRAM | Speed (tok/s) | 40-batch `val_ce` / `val_ppl` | **Full 774-batch `val_ce` / `val_ppl`** | Status / Note |
 |---|---|---|---|---|---|---|
-| **`rpp_5g_pure_rev_dualread_lin_100m`** | `d=768, L=12, f=g=1076` (`101.22M`, `s42, 10k`) | *Running...* | *Running...* | *Running...* | *Running...* | Running now (`V15_QUEUE_PID=47585`); quantifies `101M` PPL & VRAM savings vs matched `gpt_100m` |
-| **`gpt_100m`** | `d=768, L=12, ffn=2164` (`101.14M`, `s42, 10k`) | *Queued* | *Queued* | *Queued* | *Queued* | Queued right behind; matched `101.14M` full-attention baseline |
+| **`rpp_5g_pure_rev_dualread_lin_100m`** | `d=768, L=12, f=g=1076` (`101.22M`, `s42, 10k`) | **`2,136 MB`** | `~29,150` | `3.5255` / `33.97` | **`3.4809` / `32.49`** | **Ties `gpt_100m` (`32.52`, `-0.03 PPL`) at `2.369×` LESS VRAM (`2,136` vs `5,059 MB`) — proving the reversible memory advantage is scale-invariant (`2.361×` at `46M` -> `2.369×` at `101M`, `0` NaNs)** |
+| **`gpt_100m`** | `d=768, L=12, ffn=2164` (`101.14M`, `s42, 10k`) | `5,059 MB` | **`~43,700`** | `3.5255` / `33.97` | **`3.4817` / `32.52`** | **Matched `101.14M` full-attention baseline** (`0` NaNs) |
 
 ---
 
